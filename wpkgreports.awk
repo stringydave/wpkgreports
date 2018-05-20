@@ -52,6 +52,7 @@
 # 11/09/17  dce  report package timeout
 # 14/05/18  dce  add current windows 10 editions + Home
 # 16/05/18  dce  sanitise for github
+# 20/05/18  dce  allow username to be inserted anywhere in the file
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -85,6 +86,7 @@ FNR == 1 { ++pc_count }
 ((FNR == 1) && (NR != 1)) {
 	format_results()
 	# and clear the data for this pc
+    head_data = ""
 	this_data = ""
 	for (i in package_status)
 		delete package_status[i]
@@ -158,7 +160,12 @@ FNR == 1 { ++pc_count }
 	this_data = this_data sprintf("Unable to find any matching host definition for: %s\n", hostname)
 }
 
+# and this is where we've used the login script to copy the log file to the central folder, but there wasn't one for this machine.
 /WPKG log file not found/ { 
+	hostname = FILENAME
+	sub(/^.*wpkg-/, "", hostname)
+	sub(/.log/, "", hostname)
+	format_head("", hostname, "unknown")
 	this_data = this_data sprintf("WPKG log file not found on %s\n", hostname)
 	++log_not_found
 }
@@ -378,14 +385,23 @@ function format_head(shortdomain, hostname, os) {
 	if (date_time < date) { date_late = "OLD" } else { date_late = "*" }
 	# this_data = this_data sprintf("%s\n", sline)
 	# rdata = rdata pc_count "  "  # debug
- 	this_data = this_data sprintf("%-20s %-" oslen "s user: %-16s%20s %3s\n", shortdomain "\\" hostname, os, usernames[hostname], date_time, date_late)
-	this_data = this_data sprintf("%s", sline)
-	username = ""
+    
+    _shortdomain[hostname] = shortdomain
+    _os[hostname] = os
+    # usernames[hostname] 
+    _date_time[hostname] = date_time
+    _date_late[hostname] = date_late
+    
+ 	# this_data = this_data sprintf("%-20s %-" oslen "s user: %-16s%20s %3s\n", shortdomain "\\" hostname, os, usernames[hostname], date_time, date_late)
+	# this_data = this_data sprintf("%s", sline)
+	# username = ""
 }
 
 function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
+    
+ 	head_data = sprintf("%-20s %-" oslen "s user: %-16s%20s %3s\n", _shortdomain[hostname] "\\" hostname, _os[hostname], usernames[hostname], _date_time[hostname],  _date_late[hostname])
     
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
@@ -404,9 +420,9 @@ function format_results() {
 	# if the packages were all ok (or if there were none), then this is a success
 	if (pc_state == 1) {
 		++pc_ok
-		rdata[date_late] = rdata[date_late] this_data sline rsync_status
+		rdata[date_late] = rdata[date_late] head_data sline this_data sline rsync_status
     } else {
         if (date_late == "*") { ++pc_fail_today }
-		fdata[date_late] = fdata[date_late] this_data sline rsync_status
+		fdata[date_late] = fdata[date_late] head_data sline this_data sline rsync_status
 	}
 }
