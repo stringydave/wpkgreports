@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- 
+    copy wpkg logfile to \\servername\wpkgreports\ for further processing
+    execute at 0 priority so it executes last
+    
+    assumptions/notes:
+    1. wpkg logfile is at root of %systemdrive%
+    2. logfiles are copied to \\servername\wpkgreports
+    3. the user running wpkg has write access to this folder.
+       this may be accomplished by enabling guest write access to the folder (easy on Samba 3, less so on real current AD)
+       or by supplying credentials to wpkg to connect to the server with.
+    4. because we're copying the log file to a server, do this only for machines on site, not remote machines.
+    
+    18/04/14  dce   version based on http://www.pretentiousname.com/timesync/
+    23/03/15  dce   move reports to wpkgreports
+    25/03/15  dce   add not very well documented notify="false" so we can turn on notification in general
+                    derive server name from %SOFTWARE%
+    14/08/15  dce   use %comspec% /c cscript to run vbs file, so we can do the SET variable manipulation
+    03/08/15  dce   small tweak to wpkgreports path generation
+    21/05/18  dce   use wpkguserdetails.vbs
+-->
+
+<packages:packages xmlns:packages="http://www.wpkg.org/packages"
+	xmlns:wpkg="http://www.wpkg.org/wpkg" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.wpkg.org/packages xsd/packages.xsd">
+
+  <package
+    id="logfile"
+    name="copy logfile to server"
+    revision="1"
+    priority="0"
+    notify="false"
+    execute="always">
+
+    <!-- 
+      here we leverage the ability of the cmd shell to do simple set variable manipulation:
+      if we have previously defined %SOFTWARE%=\\software\updates\packages
+      then %SOFTWARE:packages=scripts%              gives us:  \\software\updates\scripts
+      and  %SOFTWARE:updates\packages=wpkgreports%  gives us:  \\software\wpkgreports
+      for further explanation, consult the help for SET (set /?)
+    -->
+
+    <!-- get last logged off user from eventlog -->
+    <install timeout="30" cmd='%COMSPEC% /c cscript //nologo %SOFTWARE:packages=scripts%\wpkguserdetails.vbs > "%TEMP%\username.tmp"' />
+    <!-- and copy both files to the server -->
+    <install timeout="30" cmd='%COMSPEC% /C copy /y /A "%TEMP%\username.tmp" + /A %SYSTEMDRIVE%\wpkg-%COMPUTERNAME%.log %SOFTWARE:updates\packages=wpkgreports%\wpkg-%COMPUTERNAME%.log' />
+
+    </package>
+
+  </packages:packages>
