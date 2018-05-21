@@ -13,20 +13,16 @@
 ' 28/12/16  dce  also ignore DWM users - new anonymous users on Win 10?
 ' 18/05/17  dce  and UMFD users - new on Windows 10.2
 ' 19/05/16  dce  ignore IUSR
-' 20/05/18  dce  pass a filename to write to
+' 21/05/18  dce  simplify, change comments
 ' -----------------------------------------------------------'
 
 Option Explicit
 
 ' get the username
-Dim objWMI, objItem, fso, objFile
-Dim strLogFile
+Dim objWMI, objItem
 Dim strComputer, strUserName, strLogType
 Dim intEventID, colLoggedEvents, intUserNameStart, intUserNameEnd, intCounter
 Const ForReading = 1, ForWriting = 2, ForAppending = 8
-Dim objArgs
-Set objArgs = Wscript.Arguments
-
 
 ' --------------------------------------------------------
 ' we get something like this in the event log
@@ -84,7 +80,8 @@ For Each objItem in colLoggedEvents
 		
         if ((strUserName <> "ANONYMOUS LOGON") and (InStr(1,strUserName,"DWM",1) <> 1) and (InStr(1,strUserName,"UMFD",1) <> 1) and (InStr(1,strUserName,"IUSR",1) <> 1)) then 
             ' we've found the data we're looking for, exit the loop
-            Exit For
+            Wscript.Echo "username=" & strUserName
+            WScript.Quit
         End If
         
 		' make sure we don't go on for ever...
@@ -93,22 +90,6 @@ For Each objItem in colLoggedEvents
         
 	End If
 Next
-
-If objArgs.Count < 1 Then 
-    ' no parameter was passed, just echo the data
-    Wscript.Echo "username=" & strUserName
-Else
-    ' if a parameter is passed, it should be a file, it doesn't matter if it doesn't exist as we're going to append to it.
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    strLogFile = objArgs(0)
-    ' if the file does not exist, we shall need to create it
-    ' object.OpenTextFile (filename [, iomode[, createifnotexist[, format]]])
-    On Error Resume Next
-    Set objFile = fso.OpenTextFile(strLogFile, ForAppending, true)
-    objFile.Writeline "username=" & strUserName
-If Err.Number <> 0 Then WScript.Quit 1000 End If
-    objFile.Close
-End If
 
 ' never get here unless no users ever logged off
 WScript.Quit
