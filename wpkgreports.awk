@@ -54,6 +54,7 @@
 # 16/05/18  dce  sanitise for github
 # 20/05/18  dce  allow username to be inserted anywhere in the file
 # 01/06/18  dce  we now add LastLoggedOnUser to the file
+#                add architecture if x86, minor formatting changes
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -64,7 +65,10 @@ BEGIN {
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
-    oslen = 12
+    # these for formatting the output
+    hostlen = 20
+    oslen   = 18
+    userlen = 15
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
 	errortext[1603] = "fatal, prob permissions"
@@ -133,6 +137,7 @@ $1 ~ /LastLoggedOnUser/ {
 	# 2014-01-13 08:28:33, DEBUG   : Host properties: hostname='farsight'|architecture='x86'|os='microsoft windows xp professional, , sp3, 5.1.2600'|ipaddresses='10.10.10.10'|domain name='thisdomain'|groups='Domain Computers'|lcid='809'|lcidOS='409'
     # 2016-12-08 09:58:26, DEBUG   : Host properties: hostname='system04'|architecture='x64'|os='microsoft windows 10 pro, , , 10.0.14393'|ipaddresses='10.10.10.10,192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
     # 2017-01-04 01:00:38, DEBUG   : Host properties: hostname='server01'|architecture='x64'|os='microsoft windows server 2008 r2 standard, , sp1, 6.1.7601'|ipaddresses='10.10.10.10'|domain name='thedomain.com'|groups='Domain Controllers'|lcid='809'|lcidOS='409'
+    # 2016-12-08 09:58:26, DEBUG   : Host properties: hostname='system05'|architecture='x86'|os='microsoft windows 10 pro, , , 10.0.16299'|ipaddresses='192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
 
 	split ($0, stringparts, "'")
 	hostname     = stringparts[2]
@@ -148,18 +153,38 @@ $1 ~ /LastLoggedOnUser/ {
 	sub (/ STANDARD/, "", osparts[1])
 	sub (/ HOME/, "H", osparts[1])
 	sub (/ PRO/, "", osparts[1])
+    
+    # remove spaces from service pack
+    sub (/ /, "", osparts[3])
+    
     # win 10
+    print "os =" osparts[1] ":" osparts[3] ":"
+    print "os =" os ":"
     if (osparts[4] ~ /10586/) { sub(/10/, "10.0",    osparts[1]) } # 1511
     if (osparts[4] ~ /14393/) { sub(/10/, "10.1607", osparts[1]) } # 1607
     if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) } # 1703
     if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) } # 1709
     if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) } # 1803
-    # truncate the os string to oslen
-	os = substr(osparts[1] osparts[3],1 ,oslen)
+
     
-    # add as much of the domain as will fit into 20 char
-    hostlen = 20 - length(hostname) - 1
-    shortdomain = substr(domain,1,hostlen)
+    # now add service pack or x86 to the os string as applicable
+	os = osparts[1] osparts[3]
+    if (osparts[3] == " ") { os = osparts[1] }
+    if (architecture !~ "x64") { 
+    print "here"
+    os = os " " architecture }
+    
+    # truncate the os string to oslen
+    # print "os =" osparts[1] ":" osparts[3] ":"
+	# os = substr(osparts[1] osparts[3],1 ,oslen)
+    print "os =" os ":arch:" architecture
+    # and add the architecture
+    # os = os ":" architecture
+    
+    
+    # add as much of the domain as will fit into hostlen char
+    hostnamelen = hostlen - length(hostname) - 1
+    shortdomain = substr(domain,1,hostnamelen)
     
     # initialise this
     rsync_status = ""
@@ -419,7 +444,7 @@ function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
     
- 	head_data = sprintf("%-20s %-" oslen "s user: %-16s%20s %3s\n", _shortdomain[hostname] "\\" hostname, _os[hostname], usernames[hostname], _date_time[hostname],  _date_late[hostname])
+ 	head_data = sprintf("%-" hostlen "s %-" oslen "suser :%-" userlen "s %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(_os[hostname],1,oslen), substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
     
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
