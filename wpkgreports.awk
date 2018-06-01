@@ -61,7 +61,7 @@
 
 BEGIN {
 	# set script version
-	script_version = 3.6
+	script_version = 3.8
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
