@@ -1,7 +1,7 @@
 # wpkgreports
 awk script to format the wpkg debug files from machines on our network into an email report
 
-process a wpkg report or a folder of reports into a helpful output, this version runs on Linux, but the code is designed to "JustWork" on Windows too.
+process a wpkg report or a folder of reports into a helpful output, this version runs on Linux, but the code is designed to "JustWork™" on Windows too.
 
 show:
 
