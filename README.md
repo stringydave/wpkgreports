@@ -14,3 +14,5 @@ show:
 call as:
 
 `awk -v date="$(date +"%Y-%m-%d")" -f $scriptpath/wpkgreports.awk $reportpath/*.log > /tmp/wpkgreports.txt`
+
+A sample wpkg package definition (logfile.xml) shows how we can add the value of LastLoggedOnUser to the logfile copied to the server, which allows us to include this in the report.

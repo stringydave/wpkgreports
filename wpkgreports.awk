@@ -53,6 +53,7 @@
 # 14/05/18  dce  add current windows 10 editions + Home
 # 16/05/18  dce  sanitise for github
 # 20/05/18  dce  allow username to be inserted anywhere in the file
+# 01/06/18  dce  we now add LastLoggedOnUser to the file
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -92,9 +93,26 @@ FNR == 1 { ++pc_count }
 		delete package_status[i]
 }
 
-# in the first line of the file we have added the username, but it may have something that's not /[A-Za-z0-9]/ at the end
+# we have added a line with the username, but it may have something that's not /[A-Za-z0-9]/ at the end
 /^username/ { 
 	username = substr($0, index($0,"=") + 1)
+	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
+	sub(/[^A-Za-z0-9]+$/, "", username)
+   	hostname = tolower(FILENAME)
+	sub(/^.*wpkg-/, "", hostname)
+	sub(/.log/, "", hostname)
+	sub(/.usr/, "", hostname)
+    # print hostname, username, FILENAME, $0
+	# and load it into an array so we can pull it out again
+    usernames[hostname] = username
+}
+
+# somewhere in the file we've dumped the contents of HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\LastLoggedOnUser
+# but it may have something that's not /[A-Za-z0-9]/ at the end
+#    LastLoggedOnUser    REG_SZ    DAVENTRY\simonw
+
+$1 ~ /LastLoggedOnUser/ { 
+	username = substr($3, index($3,"\\") + 1)
 	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
 	sub(/[^A-Za-z0-9]+$/, "", username)
    	hostname = tolower(FILENAME)

@@ -19,6 +19,8 @@
     14/08/15  dce   use %comspec% /c cscript to run vbs file, so we can do the SET variable manipulation
     03/08/15  dce   small tweak to wpkgreports path generation
     21/05/18  dce   use wpkguserdetails.vbs
+    29/05/18  ab    get LastLoggedOnUser from registry
+    01/06/18  dce   remove the old way, copy to server only if share exists
 -->
 
 <packages:packages xmlns:packages="http://www.wpkg.org/packages"
@@ -32,20 +34,23 @@
     priority="0"
     notify="false"
     execute="always">
+    
 
+    <variable name="REG" value="HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\" />
+    <variable name="KEY" value="LastLoggedOnUser" />
+    
     <!-- 
       here we leverage the ability of the cmd shell to do simple set variable manipulation:
       if we have previously defined %SOFTWARE%=\\software\updates\packages
-      then %SOFTWARE:packages=scripts%              gives us:  \\software\updates\scripts
-      and  %SOFTWARE:updates\packages=wpkgreports%  gives us:  \\software\wpkgreports
+      then %SOFTWARE:updates\packages=wpkgreports%  gives us:  \\software\wpkgreports
       for further explanation, consult the help for SET (set /?)
     -->
 
-    <!-- get last logged off user from eventlog -->
-    <install timeout="30" cmd='%COMSPEC% /c cscript //nologo %SOFTWARE:packages=scripts%\wpkguserdetails.vbs > "%TEMP%\username.tmp"' />
+    <!-- get last logged on user from registry -->
+    <install timeout="30" cmd='%COMSPEC% /C reg query %REG% /v %KEY% > "%TEMP%\username.tmp"' />
     <!-- and copy both files to the server -->
-    <install timeout="30" cmd='%COMSPEC% /C copy /y /A "%TEMP%\username.tmp" + /A %SYSTEMDRIVE%\wpkg-%COMPUTERNAME%.log %SOFTWARE:updates\packages=wpkgreports%\wpkg-%COMPUTERNAME%.log' />
+    <install timeout="30" cmd='%COMSPEC% /C if exist "%SOFTWARE:updates\packages=wpkgreports%\" copy /y /A "%TEMP%\username.tmp" + /A %SYSTEMDRIVE%\wpkg-%COMPUTERNAME%.log %SOFTWARE:updates\packages=wpkgreports%\wpkg-%COMPUTERNAME%.log' />
 
-    </package>
+  </package>
 
-  </packages:packages>
+</packages:packages>
