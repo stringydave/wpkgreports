@@ -55,13 +55,14 @@
 # 20/05/18  dce  allow username to be inserted anywhere in the file
 # 01/06/18  dce  we now add LastLoggedOnUser to the file
 #                add architecture if x86, minor formatting changes
+# 04/06/18  dce  3.8.1 remove debugging code
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = 3.8
+	script_version = 3.8.1
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -158,8 +159,6 @@ $1 ~ /LastLoggedOnUser/ {
     sub (/ /, "", osparts[3])
     
     # win 10
-    print "os =" osparts[1] ":" osparts[3] ":"
-    print "os =" os ":"
     if (osparts[4] ~ /10586/) { sub(/10/, "10.0",    osparts[1]) } # 1511
     if (osparts[4] ~ /14393/) { sub(/10/, "10.1607", osparts[1]) } # 1607
     if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) } # 1703
@@ -171,16 +170,7 @@ $1 ~ /LastLoggedOnUser/ {
 	os = osparts[1] osparts[3]
     if (osparts[3] == " ") { os = osparts[1] }
     if (architecture !~ "x64") { 
-    print "here"
     os = os " " architecture }
-    
-    # truncate the os string to oslen
-    # print "os =" osparts[1] ":" osparts[3] ":"
-	# os = substr(osparts[1] osparts[3],1 ,oslen)
-    print "os =" os ":arch:" architecture
-    # and add the architecture
-    # os = os ":" architecture
-    
     
     # add as much of the domain as will fit into hostlen char
     hostnamelen = hostlen - length(hostname) - 1
