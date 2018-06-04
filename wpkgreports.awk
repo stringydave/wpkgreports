@@ -56,13 +56,15 @@
 # 01/06/18  dce  we now add LastLoggedOnUser to the file
 #                add architecture if x86, minor formatting changes
 # 04/06/18  dce  3.8.1 remove debugging code
+#                3.8.2 currently we need to update the Windows 10 version strings for each new version, put in a catchall if we haven't done that yet.
+#                script_version is a string
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = 3.8.1
+	script_version = "3.8.2"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -160,11 +162,12 @@ $1 ~ /LastLoggedOnUser/ {
     
     # win 10
     if (osparts[4] ~ /10586/) { sub(/10/, "10.0",    osparts[1]) } # 1511
-    if (osparts[4] ~ /14393/) { sub(/10/, "10.1607", osparts[1]) } # 1607
-    if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) } # 1703
-    if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) } # 1709
-    if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) } # 1803
-
+    if (osparts[4] ~ /14393/) { sub(/10/, "10.1607", osparts[1]) }
+    if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) }
+    if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) }
+    if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) }
+    # if we've not matched by now, just use the unique part of the version string
+    if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
     
     # now add service pack or x86 to the os string as applicable
 	os = osparts[1] osparts[3]
