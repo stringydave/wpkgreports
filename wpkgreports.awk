@@ -58,6 +58,7 @@
 # 04/06/18  dce  3.8.1 remove debugging code
 #                3.8.2 currently we need to update the Windows 10 version strings for each new version, put in a catchall if we haven't done that yet.
 #                script_version is a string
+# 05/10/18  ab   add windows 10 1809
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -166,6 +167,7 @@ $1 ~ /LastLoggedOnUser/ {
     if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) }
     if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) }
     if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) }
+    if (osparts[4] ~ /17763/) { sub(/10/, "10.1809", osparts[1]) }
     # if we've not matched by now, just use the unique part of the version string
     if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
     
