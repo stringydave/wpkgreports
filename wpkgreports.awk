@@ -59,13 +59,18 @@
 #                3.8.2 currently we need to update the Windows 10 version strings for each new version, put in a catchall if we haven't done that yet.
 #                script_version is a string
 # 05/10/18  ab   add windows 10 1809
+# 19/10/18  dce  update comments around "not required"
+# 25/01/19  dce  update 1603 error, if chrome tries to install an older version it fails 1603
+# 08/03/19  dce  3.8.5 simplify regex for "no uninstall entry" to make it match on linux too.
+# 12/03/19  dce  flag up if a package is broken
+# 27/03/19  dce  3.8.6 add 10.1903
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.8.3"
+	script_version = "3.8.6"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -75,7 +80,7 @@ BEGIN {
     userlen = 15
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
-	errortext[1603] = "fatal, prob permissions"
+	errortext[1603] = "version or permissions"
 	errortext[1605] = "only valid for installed product"
 	errortext[1612] = "installation source not available"
 	errortext[1618] = "another installation is in progress"
@@ -168,6 +173,7 @@ $1 ~ /LastLoggedOnUser/ {
     if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) }
     if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) }
     if (osparts[4] ~ /17763/) { sub(/10/, "10.1809", osparts[1]) }
+    if (osparts[4] ~ /18362/) { sub(/10/, "10.1903", osparts[1]) }
     # if we've not matched by now, just use the unique part of the version string
     if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
     
@@ -207,6 +213,17 @@ $1 ~ /LastLoggedOnUser/ {
 	this_data = this_data sprintf("WPKG log file not found on %s\n", hostname)
 	++log_not_found
 }
+
+# if the package file is broken
+# 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
+# 2019-03-12 12:34:18, ERROR   : Database inconsistency: Package with ID 'fsclient' does not exist within the package database or the local settings file. Please contact your system administrator!
+/Database inconsistency: Package with ID/ {
+	# the part enclosed in ' is the package name
+	split ($0, stringparts, "'")
+	package_name = stringparts[2]
+	package_status[package_name] = "package broken"
+}
+
 
 # pairs we are looking for are:
 # nothing to do:
@@ -286,11 +303,9 @@ $1 ~ /LastLoggedOnUser/ {
     package_timeout[package_name] = ""
 }
 
-# Uninstall entry for ... missing: test failed.
-# The path ... does not exist: the test failed.
-/Uninstall entry .* test failed.$/ {
-    # need special for Java until next version updates the saved checks
-   	if ($0 !~ /Java 8/) { package_status[package_name] = "no entry" }
+# Uninstall entry for ... missing: test failed.  :: products which are not required
+/Uninstall entry .* test failed/ {
+   	if ($0 !~ /Java 8/) { package_status[package_name] = "no uninstall entry" }
 }
 
 # Package 'Visual C++ Redistributable' (vc_redist): Already installed.
@@ -300,7 +315,8 @@ $1 ~ /LastLoggedOnUser/ {
 	# the part enclosed in ' is the package name
 	split ($0, stringparts, "'")
 	package_name = stringparts[2]
-    if (package_status[package_name] == "no entry") { package_status[package_name] = "not required"} else {	package_status[package_name] = "ok" }
+    # if we've already determined it's not installed, then it will be because it's not required, otherwise status is OK
+    if (package_status[package_name] == "no uninstall entry") { package_status[package_name] = "not required"} else {	package_status[package_name] = "ok" }
 }
 
 /installed successfully/ {
