@@ -64,13 +64,15 @@
 # 08/03/19  dce  3.8.5 simplify regex for "no uninstall entry" to make it match on linux too.
 # 12/03/19  dce  flag up if a package is broken
 # 27/03/19  dce  3.8.6 add 10.1903
+# 05/08/19  dce  update package broken code
+# 18/08/19  dce  add operating systems to header
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.8.6"
+	script_version = "3.8.8"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -189,6 +191,8 @@ $1 ~ /LastLoggedOnUser/ {
     
     # initialise this
     rsync_status = ""
+	# count os versions
+	++os_list[os]
     
 	format_head(shortdomain, hostname, os)
 }
@@ -217,7 +221,9 @@ $1 ~ /LastLoggedOnUser/ {
 # if the package file is broken
 # 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
 # 2019-03-12 12:34:18, ERROR   : Database inconsistency: Package with ID 'fsclient' does not exist within the package database or the local settings file. Please contact your system administrator!
-/Database inconsistency: Package with ID/ {
+# 2019-08-04 10:49:34, WARNING : Database inconsistency: Package with package ID 'windows10settings' missing in package database. Package information found on local installation:|Package ID: Database inconsistency: Package with package ID 'windows10settings' missing in package database. Package information found on local installation:|Package Name: Windows 10 Settings|Package Revision: 1.4|
+# /Database inconsistency: Package with|Error parsing xml/ {
+/Database inconsistency: Package with/ {
 	# the part enclosed in ' is the package name
 	split ($0, stringparts, "'")
 	package_name = stringparts[2]
@@ -412,6 +418,13 @@ END {
 	format_results() 
 	
     # print the header
+	# list the operating systems
+	os_list_max = asorti(os_list, os_list_index)
+	for (q = 1; q <= os_list_max; q++) { 
+		os_list_all = os_list_all sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
+		sep = ", "
+	}
+	
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	print " computers checked:", pc_count", of which", pc_ok, "complete =", int(100 * pc_ok/pc_count) "% success"
 	if (log_not_found > 0) {
@@ -421,6 +434,7 @@ END {
 	if (package_count > 0) {
 	print " package instances:", package_count", of which", package_fail, "failed, &", not_checked, "not checked = " int(100 * (package_count - package_fail - not_checked)/package_count) "% success"
 	}
+	print " operating systems:", os_list_all
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	
 	if ("*" in fdata)   { printf("%sfailed installs today:\n%s%s\n",     dline, dline, fdata["*"]) }
