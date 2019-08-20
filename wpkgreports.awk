@@ -66,6 +66,7 @@
 # 27/03/19  dce  3.8.6 add 10.1903
 # 05/08/19  dce  update package broken code
 # 18/08/19  dce  add operating systems to header
+# 20/08/19  dce  Windows 10 version translation table in BEGIN section, remove "for workstations"
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -90,6 +91,15 @@ BEGIN {
     errortext[1636]	= "the package could not be opened. "
 	errortext[1638] = "another version is already installed"
     errortext[1642] = "not valid patch"
+	
+	# translation table between ver strings and release names
+    osrelease["10.0.10586"] = "10.0"                  # 1511
+    osrelease["10.0.14393"] = "10.1607"
+    osrelease["10.0.15063"] = "10.1703"
+    osrelease["10.0.16299"] = "10.1709"
+    osrelease["10.0.17134"] = "10.1803"
+    osrelease["10.0.17763"] = "10.1809"
+    osrelease["10.0.18362"] = "10.1903"
     
     sline = "---------------------------------------------------------------------------------\n"
     dline = "=================================================================================\n"
@@ -160,22 +170,18 @@ $1 ~ /LastLoggedOnUser/ {
 	osparts[1] = toupper(osparts[1])
 	sub (/MICROSOFT WINDOWS SERVER/, "svr", osparts[1])
 	sub (/MICROSOFT WINDOWS/, "win", osparts[1])
+	sub (/ FOR WORKSTATIONS/, "", osparts[1])
 	sub (/ PROFESSIONAL/, "", osparts[1])
 	sub (/ STANDARD/, "", osparts[1])
 	sub (/ HOME/, "H", osparts[1])
 	sub (/ PRO/, "", osparts[1])
     
-    # remove spaces from service pack
+    # remove spaces from service pack & string
     sub (/ /, "", osparts[3])
+    sub (/ /, "", osparts[4])
     
     # win 10
-    if (osparts[4] ~ /10586/) { sub(/10/, "10.0",    osparts[1]) } # 1511
-    if (osparts[4] ~ /14393/) { sub(/10/, "10.1607", osparts[1]) }
-    if (osparts[4] ~ /15063/) { sub(/10/, "10.1703", osparts[1]) }
-    if (osparts[4] ~ /16299/) { sub(/10/, "10.1709", osparts[1]) }
-    if (osparts[4] ~ /17134/) { sub(/10/, "10.1803", osparts[1]) }
-    if (osparts[4] ~ /17763/) { sub(/10/, "10.1809", osparts[1]) }
-    if (osparts[4] ~ /18362/) { sub(/10/, "10.1903", osparts[1]) }
+    if (osparts[4] in osrelease ) { sub(/10/, osrelease[osparts[4]],    osparts[1]) }
     # if we've not matched by now, just use the unique part of the version string
     if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
     
