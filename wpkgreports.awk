@@ -67,13 +67,15 @@
 # 05/08/19  dce  update package broken code
 # 18/08/19  dce  add operating systems to header
 # 20/08/19  dce  Windows 10 version translation table in BEGIN section, remove "for workstations"
+# 22/08/19  dce  more work to cope with microsoft(r) & microsoft® in o/s string
+#                print errors for broken xml
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.0"
+	script_version = "3.9.2"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -152,6 +154,22 @@ $1 ~ /LastLoggedOnUser/ {
 # ignore lines to do with logfile
 /(logfile)/ { next } 
 
+# if a package file is broken (1)
+# 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
+# 2019-08-02 07:02:57, ERROR   : Error parsing xml '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml': Das Stylesheet enthält kein Dokumentelement.  Das Stylesheet ist möglicherweise leer, oder es ist kein wohlgeformtes XML-Dokument.|
+# 2019-08-02 07:02:57, ERROR   : No root element found in '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml'.
+# 2019-08-02 07:02:57, ERROR   : Error parsing xml '//wpkgserver.de.accuride.com/wpkg/packages/klio.xml': Das Stylesheet enthält kein Dokumentelement.  Das Stylesheet ist möglicherweise leer, oder es ist kein wohlgeformtes XML-Dokument.|
+# for these ones we don't have a package name, and potentially we'll get this reported in every file, so just keep track of the ones which are unique
+/Error parsing xml/ {
+	# the part enclosed in ' is the file path, characters like "ä" break awk, so avoid them
+	split ($0, stringparts, "'")
+	package_file = stringparts[2]
+	if (!(package_file in broken_package_file)) {
+		print "Error parsing xml:", package_file
+		broken_package_file[package_file] = 1
+	}
+}
+
 /Host properties: hostname=/ {
 	# we can just split this up on "'"
     # 2014-01-13 08:22:26, DEBUG   : Host properties: hostname='system03'|architecture='x64'|os='microsoft windows 7 professional, , sp1, 6.1.7601'|ipaddresses='10.10.10.10,192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
@@ -159,6 +177,8 @@ $1 ~ /LastLoggedOnUser/ {
     # 2016-12-08 09:58:26, DEBUG   : Host properties: hostname='system04'|architecture='x64'|os='microsoft windows 10 pro, , , 10.0.14393'|ipaddresses='10.10.10.10,192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
     # 2017-01-04 01:00:38, DEBUG   : Host properties: hostname='server01'|architecture='x64'|os='microsoft windows server 2008 r2 standard, , sp1, 6.1.7601'|ipaddresses='10.10.10.10'|domain name='thedomain.com'|groups='Domain Controllers'|lcid='809'|lcidOS='409'
     # 2016-12-08 09:58:26, DEBUG   : Host properties: hostname='system05'|architecture='x86'|os='microsoft windows 10 pro, , , 10.0.16299'|ipaddresses='192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
+	# 2019-07-24 10:06:31, DEBUG   : Host properties: hostname='de6'|architecture='x64'|os='microsoft(r) windows(r) server 2003 standard x64 edition, , sp2, 5.2.3790'|ipaddresses='10.81.1.200,10.81.1.200'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='409'|lcidOS='409'
+	# 2019-08-02 07:03:00, DEBUG   : Host properties: hostname='desql2'|architecture='x64'|os='microsoft® windows server® 2008 standard, , sp2, 6.0.6002'|ipaddresses='10.81.1.202,10.81.1.202,10.81.35.34'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='407'|lcidOS='407'
 
 	split ($0, stringparts, "'")
 	hostname     = stringparts[2]
@@ -168,12 +188,18 @@ $1 ~ /LastLoggedOnUser/ {
 	# and munge this about
 	split (os, osparts, ",")
 	osparts[1] = toupper(osparts[1])
-	sub (/MICROSOFT WINDOWS SERVER/, "svr", osparts[1])
+	# remove any weird characters
+	gsub (/\xAE/, "", osparts[1])                   # e.g. in "microsoft® windows server®"
+	gsub (/\(R\)/, "", osparts[1])                  # e.g. in "microsoft(r) windows(r) server"
+	sub (/MICROSOFT.*SERVER/, "svr", osparts[1])
 	sub (/MICROSOFT WINDOWS/, "win", osparts[1])
 	sub (/ FOR WORKSTATIONS/, "", osparts[1])
 	sub (/ PROFESSIONAL/, "", osparts[1])
 	sub (/ STANDARD/, "", osparts[1])
+	sub (/ ULTIMATE/, "", osparts[1])
+	sub (/ EDITION/, "", osparts[1])
 	sub (/ HOME/, "H", osparts[1])
+	sub (/ EVALUATION/, "Ev", osparts[1])
 	sub (/ PRO/, "", osparts[1])
     
     # remove spaces from service pack & string
@@ -183,7 +209,7 @@ $1 ~ /LastLoggedOnUser/ {
     # win 10
     if (osparts[4] in osrelease ) { sub(/10/, osrelease[osparts[4]],    osparts[1]) }
     # if we've not matched by now, just use the unique part of the version string
-    if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
+    # if (osparts[1] !~ /10\./) { sub(/10/, "10." osparts[4], osparts[1]);  sub(/10\.0\./, "10.", osparts[1])} # everything else
     
     # now add service pack or x86 to the os string as applicable
 	os = osparts[1] osparts[3]
@@ -224,18 +250,15 @@ $1 ~ /LastLoggedOnUser/ {
 	++log_not_found
 }
 
-# if the package file is broken
-# 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
-# 2019-03-12 12:34:18, ERROR   : Database inconsistency: Package with ID 'fsclient' does not exist within the package database or the local settings file. Please contact your system administrator!
+# if a package file is broken (2)
 # 2019-08-04 10:49:34, WARNING : Database inconsistency: Package with package ID 'windows10settings' missing in package database. Package information found on local installation:|Package ID: Database inconsistency: Package with package ID 'windows10settings' missing in package database. Package information found on local installation:|Package Name: Windows 10 Settings|Package Revision: 1.4|
-# /Database inconsistency: Package with|Error parsing xml/ {
+# 2019-03-12 12:34:18, ERROR   : Database inconsistency: Package with ID 'fsclient' does not exist within the package database or the local settings file. Please contact your system administrator!
 /Database inconsistency: Package with/ {
 	# the part enclosed in ' is the package name
 	split ($0, stringparts, "'")
 	package_name = stringparts[2]
 	package_status[package_name] = "package broken"
 }
-
 
 # pairs we are looking for are:
 # nothing to do:
@@ -426,9 +449,14 @@ END {
     # print the header
 	# list the operating systems
 	os_list_max = asorti(os_list, os_list_index)
-	for (q = 1; q <= os_list_max; q++) { 
-		os_list_all = os_list_all sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
-		sep = ", "
+	for (q = 1; q <= os_list_max; q++) {
+		if (os_list_index[q] ~ /win/) {
+			os_wks_all = os_wks_all wks_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
+			wks_sep = ", "
+		} else {
+			os_svr_all = os_svr_all svr_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
+			svr_sep = ", "
+		}
 	}
 	
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -440,7 +468,9 @@ END {
 	if (package_count > 0) {
 	print " package instances:", package_count", of which", package_fail, "failed, &", not_checked, "not checked = " int(100 * (package_count - package_fail - not_checked)/package_count) "% success"
 	}
-	print " operating systems:", os_list_all
+	# if we've got o/s counts, then print them
+	if (length(os_wks_all) > 1) { print "   workstation o/s:", os_wks_all }
+	if (length(os_svr_all) > 1) { print "        server o/s:", os_svr_all }
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	
 	if ("*" in fdata)   { printf("%sfailed installs today:\n%s%s\n",     dline, dline, fdata["*"]) }
