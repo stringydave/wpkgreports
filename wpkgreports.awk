@@ -69,6 +69,9 @@
 # 20/08/19  dce  Windows 10 version translation table in BEGIN section, remove "for workstations"
 # 22/08/19  dce  more work to cope with microsoft(r) & microsoft® in o/s string
 #                print errors for broken xml
+# 17/01/20  dce  add 1909
+# 22/01/20  dce  ignore wpkgtidy
+# 26/02/20  dce  add profile(s) to header
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -81,7 +84,7 @@ BEGIN {
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
     # these for formatting the output
     hostlen = 20
-    oslen   = 18
+    oslen   = 20
     userlen = 15
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
@@ -102,6 +105,7 @@ BEGIN {
     osrelease["10.0.17134"] = "10.1803"
     osrelease["10.0.17763"] = "10.1809"
     osrelease["10.0.18362"] = "10.1903"
+    osrelease["10.0.18363"] = "10.1909"
     
     sline = "---------------------------------------------------------------------------------\n"
     dline = "=================================================================================\n"
@@ -151,8 +155,9 @@ $1 ~ /LastLoggedOnUser/ {
     usernames[hostname] = username
 }
 
-# ignore lines to do with logfile
-/(logfile)/ { next } 
+# ignore lines to do with logfile or wpkgtidy
+/(logfile)/  { next } 
+/(wpkgtidy)/ { next } 
 
 # if a package file is broken (1)
 # 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
@@ -227,6 +232,15 @@ $1 ~ /LastLoggedOnUser/ {
 	++os_list[os]
     
 	format_head(shortdomain, hostname, os)
+}
+
+# Profiles applying to the current host:|remote-it|
+/Profiles applying to the current host/ {
+	# sub(/\|^/, "", $0)
+	profile_list_data = substr($0,index($0,":|")+2)
+	gsub(/\|$/, "", profile_list_data)
+	gsub(/\|/, ", ", profile_list_data)
+	profile_list[hostname] = profile_list_data
 }
 
 # print out warnings
@@ -505,7 +519,8 @@ function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
     
- 	head_data = sprintf("%-" hostlen "s %-" oslen "suser :%-" userlen "s %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(_os[hostname],1,oslen), substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s             %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%" oslen "s   profile : %s\n", substr(_os[hostname],1,oslen), profile_list[hostname])
     
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
