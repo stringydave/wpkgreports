@@ -72,13 +72,15 @@
 # 17/01/20  dce  add 1909
 # 22/01/20  dce  ignore wpkgtidy
 # 26/02/20  dce  add profile(s) to header
+# 03/03/20  dce  profile line endings
+# 130/4/20  dce  ignore wpkgtidy as "tidy temp files"
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.2"
+	script_version = "3.9.4"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -157,7 +159,8 @@ $1 ~ /LastLoggedOnUser/ {
 
 # ignore lines to do with logfile or wpkgtidy
 /(logfile)/  { next } 
-/(wpkgtidy)/ { next } 
+/tidy temp files/ { next } 
+# /Time Synchronization/ { next } # we might want to ignore this one too
 
 # if a package file is broken (1)
 # 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
@@ -236,10 +239,10 @@ $1 ~ /LastLoggedOnUser/ {
 
 # Profiles applying to the current host:|remote-it|
 /Profiles applying to the current host/ {
-	# sub(/\|^/, "", $0)
 	profile_list_data = substr($0,index($0,":|")+2)
-	gsub(/\|$/, "", profile_list_data)
-	gsub(/\|/, ", ", profile_list_data)
+	gsub(/\|\r/, "", profile_list_data)  # dos line endings
+	gsub(/\|$/, "", profile_list_data)   # other line endings
+	gsub(/\|/, ", ", profile_list_data)  # any other separator lines
 	profile_list[hostname] = profile_list_data
 }
 
@@ -326,12 +329,12 @@ $1 ~ /LastLoggedOnUser/ {
 	++package_count
 }
 
-/Reading variables from package/ {
-	# the part enclosed in ' is the package name
-	# /2013-08-12 12:22:05, DEBUG   : Reading variables from package 'Mozilla Thunderbird'.
-	split ($0, stringparts, "'")
-	package_name = stringparts[2]
-}
+# /Reading variables from package/ {
+	# # the part enclosed in ' is the package name
+	# # /2013-08-12 12:22:05, DEBUG   : Reading variables from package 'Mozilla Thunderbird'.
+	# split ($0, stringparts, "'")
+	# package_name = stringparts[2]
+# }
 
 /Going to install package/ {
 	# Going to install package 'Mozilla Thunderbird' (thunderbird), Revision 31.0, (execute flag is '', notify flag is 'true').
