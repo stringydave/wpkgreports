@@ -73,14 +73,15 @@
 # 22/01/20  dce  ignore wpkgtidy
 # 26/02/20  dce  add profile(s) to header
 # 03/03/20  dce  profile line endings
-# 130/4/20  dce  ignore wpkgtidy as "tidy temp files"
+# 13/04/20  dce  ignore wpkgtidy as "tidy temp files"
+# 07/05/20  dce  show boot date if not today
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.4"
+	script_version = "3.9.5"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -155,6 +156,17 @@ $1 ~ /LastLoggedOnUser/ {
     # print hostname, username, FILENAME, $0
 	# and load it into an array so we can pull it out again
     usernames[hostname] = username
+}
+
+# somewhere in the file we've dumped the System Boot Time, show the date if it's not today's date
+# System Boot Time:          20/04/2020, 12:08:53
+/^System Boot Time/ {
+	dd = substr($4,1,2)
+	mm = substr($4,4,2)
+	yy = substr($4,7,4)
+	system_boot_date = yy "-" mm "-" dd
+	system_boot_time = substr($5,1,5)
+	boot_time[hostname] = system_boot_date " " system_boot_time
 }
 
 # ignore lines to do with logfile or wpkgtidy
@@ -329,6 +341,7 @@ $1 ~ /LastLoggedOnUser/ {
 	++package_count
 }
 
+# this is redundant
 # /Reading variables from package/ {
 	# # the part enclosed in ' is the package name
 	# # /2013-08-12 12:22:05, DEBUG   : Reading variables from package 'Mozilla Thunderbird'.
@@ -522,8 +535,15 @@ function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
     
+	# if boot_date is not today, show it, we could try to be clever & calculate boot time
+	if ((hostname in boot_time) && (substr(_date_time[hostname],1,10) !~ substr(boot_time[hostname],1,10))) {
+		boot_date_string = "boot: " boot_time[hostname]
+	} else {
+		boot_date_string = ""
+	}
+	
  	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s             %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%" oslen "s   profile : %s\n", substr(_os[hostname],1,oslen), profile_list[hostname])
+ 	head_data = head_data sprintf("%" oslen "s   profile : %s             %22s\n", substr(_os[hostname],1,oslen), profile_list[hostname], boot_date_string)
     
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
