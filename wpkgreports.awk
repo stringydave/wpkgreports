@@ -75,13 +75,14 @@
 # 03/03/20  dce  profile line endings
 # 13/04/20  dce  ignore wpkgtidy as "tidy temp files"
 # 07/05/20  dce  show boot date if not today
+# 14/05/20  dce  cope with boot date from wmic
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.5"
+	script_version = "3.9.6"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -158,8 +159,9 @@ $1 ~ /LastLoggedOnUser/ {
     usernames[hostname] = username
 }
 
-# somewhere in the file we've dumped the System Boot Time, show the date if it's not today's date
+# somewhere in the file we've dumped the System Boot Time, we want to show the date if it's not today's date, so munge it into yyyy-mm-dd
 # System Boot Time:          20/04/2020, 12:08:53
+# System Boot Time:          5/14/2020, 7:00:09 AM
 /^System Boot Time/ {
 	dd = substr($4,1,2)
 	mm = substr($4,4,2)
@@ -167,6 +169,18 @@ $1 ~ /LastLoggedOnUser/ {
 	system_boot_date = yy "-" mm "-" dd
 	system_boot_time = substr($5,1,5)
 	boot_time[hostname] = system_boot_date " " system_boot_time
+}
+
+# LastBootUpTime
+# 20200507101250.501359+060
+# use the simplest form here to make sure it works, other locales might use a comma
+/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][,\.][0-9][0-9][0-9][0-9]/ {
+	yy = substr($1,1,4)
+	mm = substr($1,5,2)
+	dd = substr($1,7,2)
+	hh = substr($1,9,2)
+	mi = substr($1,11,2)
+	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
 }
 
 # ignore lines to do with logfile or wpkgtidy
@@ -535,15 +549,15 @@ function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
     
-	# if boot_date is not today, show it, we could try to be clever & calculate boot time
+	# if boot_date is not today, show it, we could try to be clever & calculate days since boot
 	if ((hostname in boot_time) && (substr(_date_time[hostname],1,10) !~ substr(boot_time[hostname],1,10))) {
 		boot_date_string = "boot: " boot_time[hostname]
 	} else {
 		boot_date_string = ""
 	}
 	
- 	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s             %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%" oslen "s   profile : %s             %22s\n", substr(_os[hostname],1,oslen), profile_list[hostname], boot_date_string)
+ 	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s        run: %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%" oslen "s   profile : %-20s  %22s\n", substr(_os[hostname],1,oslen), profile_list[hostname], boot_date_string)
     
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
