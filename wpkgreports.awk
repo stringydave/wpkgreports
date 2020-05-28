@@ -76,13 +76,14 @@
 # 13/04/20  dce  ignore wpkgtidy as "tidy temp files"
 # 07/05/20  dce  show boot date if not today
 # 14/05/20  dce  cope with boot date from wmic
+# 28/05/20  dce  cope with win10 enterprise ltsb, add 10.2004
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.6"
+	script_version = "3.9.7"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -107,9 +108,10 @@ BEGIN {
     osrelease["10.0.15063"] = "10.1703"
     osrelease["10.0.16299"] = "10.1709"
     osrelease["10.0.17134"] = "10.1803"
-    osrelease["10.0.17763"] = "10.1809"
-    osrelease["10.0.18362"] = "10.1903"
-    osrelease["10.0.18363"] = "10.1909"
+    osrelease["10.0.17763"] = "10.1809"		# Redstone 5
+    osrelease["10.0.18362"] = "10.1903"		# 19H1
+    osrelease["10.0.18363"] = "10.1909"		# 19H2
+    osrelease["10.0.19041"] = "10.2004"		# 20H1
     
     sline = "---------------------------------------------------------------------------------\n"
     dline = "=================================================================================\n"
@@ -213,6 +215,7 @@ $1 ~ /LastLoggedOnUser/ {
     # 2016-12-08 09:58:26, DEBUG   : Host properties: hostname='system05'|architecture='x86'|os='microsoft windows 10 pro, , , 10.0.16299'|ipaddresses='192.192.192.192'|domain name='thedomain.com'|groups=''|lcid='809'|lcidOS='409'
 	# 2019-07-24 10:06:31, DEBUG   : Host properties: hostname='de6'|architecture='x64'|os='microsoft(r) windows(r) server 2003 standard x64 edition, , sp2, 5.2.3790'|ipaddresses='10.81.1.200,10.81.1.200'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='409'|lcidOS='409'
 	# 2019-08-02 07:03:00, DEBUG   : Host properties: hostname='desql2'|architecture='x64'|os='microsoft® windows server® 2008 standard, , sp2, 6.0.6002'|ipaddresses='10.81.1.202,10.81.1.202,10.81.35.34'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='407'|lcidOS='407'
+    # 2020-05-10 05:20:34, DEBUG   : Host properties: hostname='zoomuk'|architecture='x64'|os='microsoft windows 10 enterprise 2016 ltsb, , , 10.0.14393'|ipaddresses='10.71.7.40'|domain name=''|groups=''|lcid='409'|lcidOS='409'
 
 	split ($0, stringparts, "'")
 	hostname     = stringparts[2]
@@ -229,6 +232,7 @@ $1 ~ /LastLoggedOnUser/ {
 	sub (/MICROSOFT WINDOWS/, "win", osparts[1])
 	sub (/ FOR WORKSTATIONS/, "", osparts[1])
 	sub (/ PROFESSIONAL/, "", osparts[1])
+	sub (/ ENTERPRISE.*LTSB/, " Ent", osparts[1])
 	sub (/ STANDARD/, "", osparts[1])
 	sub (/ ULTIMATE/, "", osparts[1])
 	sub (/ EDITION/, "", osparts[1])
