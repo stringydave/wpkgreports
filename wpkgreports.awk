@@ -77,13 +77,15 @@
 # 07/05/20  dce  show boot date if not today
 # 14/05/20  dce  cope with boot date from wmic
 # 28/05/20  dce  cope with win10 enterprise ltsb, add 10.2004
+# 31/07/20  dce  show boot date always, add "*" if today
+# 25/08/20  dce  for package failed get the package name from the line instead of assuming it's set correctly.
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.7"
+	script_version = "3.9.10"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -103,7 +105,7 @@ BEGIN {
     errortext[1642] = "not valid patch"
 	
 	# translation table between ver strings and release names
-    osrelease["10.0.10586"] = "10.0"                  # 1511
+    osrelease["10.0.10586"] = "10.0"        # 1511
     osrelease["10.0.14393"] = "10.1607"
     osrelease["10.0.15063"] = "10.1703"
     osrelease["10.0.16299"] = "10.1709"
@@ -462,6 +464,10 @@ $1 ~ /LastLoggedOnUser/ {
 	errorcode = substr(errorcode, index(errorcode, "(") + 1 )
 	errorcode = substr(errorcode, 1, index(errorcode, ")") - 1 )
 	if (errorcode in errortext) errorcode = errorcode ", " errortext[errorcode]
+	# get the package name, between ''
+	split ($0, stringparts, "'")
+	package_name = stringparts[2]
+	# then set the status
 	package_status[package_name] = "Fail " package_timeout[package_name] errorcode
 }
 
@@ -553,11 +559,11 @@ function format_results() {
     # at this point date_late is a string = * if the date is current, so we can use this to show the current data first (as that's most interesting)
 	pc_state = 1
     
-	# if boot_date is not today, show it, we could try to be clever & calculate days since boot
-	if ((hostname in boot_time) && (substr(_date_time[hostname],1,10) !~ substr(boot_time[hostname],1,10))) {
-		boot_date_string = "boot: " boot_time[hostname]
+	# if boot_date is today, show it with a "*", we could try to be clever & calculate days since boot
+	if ((hostname in boot_time) && (substr(_date_time[hostname],1,10) ~ substr(boot_time[hostname],1,10))) {
+		boot_date_string = "boot: " boot_time[hostname] "   *"
 	} else {
-		boot_date_string = ""
+		boot_date_string = "boot: " boot_time[hostname]
 	}
 	
  	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s        run: %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
