@@ -79,13 +79,18 @@
 # 28/05/20  dce  cope with win10 enterprise ltsb, add 10.2004
 # 31/07/20  dce  show boot date always, add "*" if today
 # 25/08/20  dce  for package failed get the package name from the line instead of assuming it's set correctly.
+# 09/11/20  dce  add model, serial, bios to header
+# 16/11/20  dce  file is written by windows with DOS (CRLF) line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
+#                20H2 os code
+# 17/11/20  dce  minor formatting
+
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.9.10"
+	script_version = "3.10.0"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -105,6 +110,7 @@ BEGIN {
     errortext[1642] = "not valid patch"
 	
 	# translation table between ver strings and release names
+	# https://docs.microsoft.com/en-gb/windows/release-information/
     osrelease["10.0.10586"] = "10.0"        # 1511
     osrelease["10.0.14393"] = "10.1607"
     osrelease["10.0.15063"] = "10.1703"
@@ -114,6 +120,7 @@ BEGIN {
     osrelease["10.0.18362"] = "10.1903"		# 19H1
     osrelease["10.0.18363"] = "10.1909"		# 19H2
     osrelease["10.0.19041"] = "10.2004"		# 20H1
+    osrelease["10.0.19042"] = "10.20H2"		# 20H2
     
     sline = "---------------------------------------------------------------------------------\n"
     dline = "=================================================================================\n"
@@ -130,6 +137,11 @@ FNR == 1 { ++pc_count }
 	this_data = ""
 	for (i in package_status)
 		delete package_status[i]
+}
+
+{
+	# on every line, we've written the file with windows so it has DOS line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
+	sub(/\r/, "")
 }
 
 # we have added a line with the username, but it may have something that's not /[A-Za-z0-9]/ at the end
@@ -163,7 +175,20 @@ $1 ~ /LastLoggedOnUser/ {
     usernames[hostname] = username
 }
 
-# somewhere in the file we've dumped the System Boot Time, we want to show the date if it's not today's date, so munge it into yyyy-mm-dd
+# LastBootUpTime
+# 20200507101250.501359+060
+# use the simplest form here to make sure it works, other locales might use a comma
+/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][,\.][0-9][0-9][0-9][0-9]/ {
+	yy = substr($1,1,4)
+	mm = substr($1,5,2)
+	dd = substr($1,7,2)
+	hh = substr($1,9,2)
+	mi = substr($1,11,2)
+	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
+}
+
+# somewhere in the file we've dumped the output of Systemino, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
+# System Boot Time:          09/11/2020, 12:28:13
 # System Boot Time:          20/04/2020, 12:08:53
 # System Boot Time:          5/14/2020, 7:00:09 AM
 /^System Boot Time/ {
@@ -175,16 +200,33 @@ $1 ~ /LastLoggedOnUser/ {
 	boot_time[hostname] = system_boot_date " " system_boot_time
 }
 
-# LastBootUpTime
-# 20200507101250.501359+060
-# use the simplest form here to make sure it works, other locales might use a comma
-/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][,\.][0-9][0-9][0-9][0-9]/ {
-	yy = substr($1,1,4)
-	mm = substr($1,5,2)
-	dd = substr($1,7,2)
-	hh = substr($1,9,2)
-	mi = substr($1,11,2)
-	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
+# System Manufacturer:       Dell Inc.
+/^System Manufacturer/ {
+	system_manufacturer[hostname] = substr($0, index($0, $3))
+}
+# System Model:              Latitude 7300
+/^System Model/ {
+	system_model[hostname] = substr($0, index($0, $3))
+}
+
+# BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
+/^BIOS Version/ {
+	system_bios[hostname] = substr($0, index($0, $3))
+	# remove the manufacturer name if it matches
+	sub(system_manufacturer[hostname], "", system_bios[hostname])
+	# and these we see a lot
+	sub("Award Software International, Inc.", "Award", system_bios[hostname])
+	sub("Phoenix Technologies LTD", "Phoenix", system_bios[hostname])
+	# and any leading space
+	sub("^ ", "", system_bios[hostname])
+}
+
+# SerialNumber      : GVZKQV2
+/^SerialNumber/ {
+	serial = $3
+	# we've written the file with windows so it has DOS line endings, but we're processing it on linux, so remove extraneous CR (0x0d)
+	# sub(/\r/, "", serial)
+	system_serial[hostname] = serial
 }
 
 # ignore lines to do with logfile or wpkgtidy
@@ -561,14 +603,15 @@ function format_results() {
     
 	# if boot_date is today, show it with a "*", we could try to be clever & calculate days since boot
 	if ((hostname in boot_time) && (substr(_date_time[hostname],1,10) ~ substr(boot_time[hostname],1,10))) {
-		boot_date_string = "boot: " boot_time[hostname] "   *"
+		boot_date_string = boot_time[hostname] "   *"
 	} else {
-		boot_date_string = "boot: " boot_time[hostname]
+		boot_date_string = boot_time[hostname]
 	}
 	
- 	head_data = sprintf("%-" hostlen "s      user : %-" userlen "s        run: %16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%" oslen "s   profile : %-20s  %22s\n", substr(_os[hostname],1,oslen), profile_list[hostname], boot_date_string)
-    
+ 	head_data =           sprintf("%-" hostlen "s      user : %-" userlen "s        run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%-" oslen   "s   profile : %-" userlen "s       boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
+ 	head_data = head_data sprintf("%-" hostlen "s    serial : %-" userlen "s       bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
+	
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
     for (j = 1; j <= n; j++) {
