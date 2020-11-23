@@ -83,6 +83,7 @@
 # 16/11/20  dce  file is written by windows with DOS (CRLF) line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
 #                20H2 os code
 # 17/11/20  dce  minor formatting
+# 23/11/20  dce  minor formatting
 
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
@@ -90,14 +91,14 @@
 
 BEGIN {
 	# set script version
-	script_version = "3.10.0"
+	script_version = "3.10.1"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
     # these for formatting the output
     hostlen = 20
     oslen   = 20
-    userlen = 15
+    userlen = 19
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
 	errortext[1603] = "version or permissions"
@@ -122,8 +123,8 @@ BEGIN {
     osrelease["10.0.19041"] = "10.2004"		# 20H1
     osrelease["10.0.19042"] = "10.20H2"		# 20H2
     
-    sline = "---------------------------------------------------------------------------------\n"
-    dline = "=================================================================================\n"
+    sline = "-------------------------------------------------------------------------------\n"
+    dline = "===============================================================================\n"
 }
 
 # count the number of files
@@ -555,7 +556,7 @@ END {
 		}
 	}
 	
-	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	print " computers checked:", pc_count", of which", pc_ok, "complete =", int(100 * pc_ok/pc_count) "% success"
 	if (log_not_found > 0) {
 	print "log file not found:", log_not_found, "    ( wpkg not installed? )"
@@ -567,7 +568,7 @@ END {
 	# if we've got o/s counts, then print them
 	if (length(os_wks_all) > 1) { print "   workstation o/s:", os_wks_all }
 	if (length(os_svr_all) > 1) { print "        server o/s:", os_svr_all }
-	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	
 	if ("*" in fdata)   { printf("%sfailed installs today:\n%s%s\n",     dline, dline, fdata["*"]) }
 	if ("*" in rdata)   { printf("%ssuccessful installs today:\n%s%s\n", dline, dline, rdata["*"]) }
@@ -608,9 +609,9 @@ function format_results() {
 		boot_date_string = boot_time[hostname]
 	}
 	
- 	head_data =           sprintf("%-" hostlen "s      user : %-" userlen "s        run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%-" oslen   "s   profile : %-" userlen "s       boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
- 	head_data = head_data sprintf("%-" hostlen "s    serial : %-" userlen "s       bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
+ 	head_data =           sprintf("%-" hostlen "s      user : %-" userlen "s  run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%-" oslen   "s   profile : %-" userlen "s boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
+ 	head_data = head_data sprintf("%-" hostlen "s    serial : %-" userlen "s bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
 	
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
