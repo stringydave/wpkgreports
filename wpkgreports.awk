@@ -84,6 +84,7 @@
 #                20H2 os code
 # 17/11/20  dce  minor formatting
 # 23/11/20  dce  minor formatting
+# 24/11/20  dce  better handling of different error conditions
 
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
@@ -499,7 +500,7 @@ $1 ~ /LastLoggedOnUser/ {
     package_timeout[package_name] = "timeout "
 }
 
-/non-successful/ {
+/non-successful value / {
 	# don't match on "ERROR" as it may occur elsewhere in the file
 	# 2013-09-25 07:09:21, ERROR   : Could not process (upgrade) package 'Java Runtime Environment 7' (java7):|Exit code returned non-successful value (1603) on command '%SOFTWARE%\jre\jre-7u%version%-windows-i586.exe /s REBOOT=Suppress'.
 	# get the bit within the brackets after the "|"
@@ -510,6 +511,22 @@ $1 ~ /LastLoggedOnUser/ {
 	# get the package name, between ''
 	split ($0, stringparts, "'")
 	package_name = stringparts[2]
+	# then set the status
+	package_status[package_name] = "Fail " package_timeout[package_name] errorcode
+}
+
+/non-successful value:/ {
+	# don't match on "ERROR" as it may occur elsewhere in the file
+	# 2020-11-24 13:05:05, ERROR   : Exit code returned non-successful value: -1|Package: PuTTY.|Command:|"%PKG_DESTINATION%\unins000.exe" /sp- /verysilent /suppressmsgboxes /norestart
+	split ($0, stringparts, "|")
+	errorcode = stringparts[1]
+	# remove everything we don't want
+	sub(/^.*value: /,"",errorcode)
+	if (errorcode in errortext) errorcode = errorcode ", " errortext[errorcode]
+	# get the package name "|Package: PuTTY.|"
+	package_name = stringparts[2]
+	package_name = substr(package_name, index(package_name,":") + 2)
+	package_name = substr(package_name, 1, index(package_name,".") - 1 )
 	# then set the status
 	package_status[package_name] = "Fail " package_timeout[package_name] errorcode
 }
