@@ -85,6 +85,7 @@
 # 17/11/20  dce  minor formatting
 # 23/11/20  dce  minor formatting
 # 24/11/20  dce  better handling of different error conditions
+# 25/12/20  dce  if multiple rsync messages, just show the last one
 
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
@@ -546,15 +547,18 @@ $1 ~ /LastLoggedOnUser/ {
     package_status[package_name] = "zombie"
 }
 
-# the rsync process for remote machines produces these lines at the end
+# the rsync process for remote machines produces these lines at the end, just pick up the last one of each type
 # 2017/04/07 08:32:57 [2380] total: matches=213719  hash_hits=213720  false_alarms=3 data=226467103
 # 2017/04/07 08:32:57 [2380] sent 1.41M bytes  received 227.39M bytes  686.07K bytes/sec
 # 2017/04/07 08:32:57 [2380] total size is 1.58G  speedup is 6.89
 # or
 # 2017/04/03 08:08:10 [2008] rsync: fork: Resource temporarily unavailable (11)
 # 2017/04/03 08:08:10 [2008] rsync error: error in IPC code (code 14) at pipe.c(65) [Receiver=3.1.1]
-/] total|] sent|] rsync/ { rsync_status =  rsync_status $0 "\n" }
-/] total |] rsync /      { rsync_status =  rsync_status sline }
+# /] total|] sent|] rsync/ { rsync_status =  $0 "\n" }
+/] total/ { rsync_total  = $0 "\n" }
+/] sent/  { rsync_sent   = $0 "\n" }
+/] rsync/ { rsync_status = $0 "\n" }
+# /] total |] rsync /      { rsync_status =  rsync_status }
 
 END {
 	# gather the summary for the last file
@@ -647,9 +651,9 @@ function format_results() {
 	# if the packages were all ok (or if there were none), then this is a success
 	if (pc_state == 1) {
 		++pc_ok
-		rdata[date_late] = rdata[date_late] head_data sline this_data sline rsync_status
-    } else {
+		rdata[date_late] = rdata[date_late] head_data sline this_data sline rsync_sent rsync_total rsync_status sline
+    } else {                                                                 
         if (date_late == "*") { ++pc_fail_today }
-		fdata[date_late] = fdata[date_late] head_data sline this_data sline rsync_status
+		fdata[date_late] = fdata[date_late] head_data sline this_data sline rsync_sent rsync_total rsync_status sline
 	}
 }
