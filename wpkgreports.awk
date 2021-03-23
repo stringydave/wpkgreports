@@ -1,4 +1,5 @@
 # process a wpkg report into a helpful output
+# uses asorti so requires gawk (not debian standard mawk)
 
 # show:
 #    summary
@@ -7,66 +8,6 @@
 #    failed OLD installs
 #    successful OLD installs
 
-# 04/11/13  dce  tidy up code
-# 08/11/13  dce  and more
-# 13/01/14  dce  add os to the output
-# 29/01/14  dce  log not found does not need format_head()
-#                tidy up code
-# 30/01/14  dce  handle upgrades
-# 22/03/14  dce  add script version
-# 05/05/14  dce  2.0 summary at top
-# 07/05/14  dce  2.1 summary, and failed installations at top, ignore "servers"
-# 09/05/14  dce  2.2 match on package_status[i] because the string may contain trailing "."
-# 03/07/14  dce  just the === lines
-# 23/07/14  dce  quit with a count of how many computers are not complete
-# 18/08/14  dce  add wpkg package version to report
-# 20/08/14  dce  report removal
-# 21/08/14  dce  escape \) required on some distributions of awk
-# 03/10/14  dce  add error 1619
-# 08/11/14  dce  show results gathered today before history
-#                show Time Synch install successful as "ok"
-# 07/02/15  dce  ignore lines to do with logfile
-# 23/06/15  dce  add error 1638
-# 03/08/15  dce  ignore packages not required
-# 06/08/15  dce  special unignore for Java 8
-#                version string to 15 ch
-# 07/08/15  dce  add zombie state
-# 31/08/15  dce  reformat to show current data first
-# 14/09/15  dce  add domain to computername
-# 26/10/15  dce  add error 1612
-# 20/11/15  dce  be optimistic, assume all packages have success unless they actually fail
-# 08/12/16  dce  show win10 version
-# 09/12/16  dce  remove PRO or PROFESSIONAL, it's just noise
-# 22/12/16  dce  exit with status of just how many failed today
-# 04/01/17  dce  simplify microsoft windows server xxxx r2 standard
-# 17/01/17  dce  fail only if Fail/zombie, all else (inc no packages) is OK
-# 24/01/17  dce  fix showing of username bug introduced with "add domain to computername" change
-#                load usernames via an array
-# 07/04/17  dce  show rsync results where applicable
-#                add code for win 10.2
-# 26/04/17  dce  cope with a second check (Verified)
-# 13/05/17  dce  add code 1636
-# 15/06/17  dce  3.5 sorting the output turned out to be surprisingly easy
-#                however it relies upon running GNU awk (gawk), default (old) Debian has mawk, so update that everywhere
-#                symptom is root gets a message: awk: /opt/updates/scripts/wpkgreports.awk: line 397: function asorti never defined
-# 11/09/17  dce  report package timeout
-# 14/05/18  dce  add current windows 10 editions + Home
-# 16/05/18  dce  sanitise for github
-# 20/05/18  dce  allow username to be inserted anywhere in the file
-# 01/06/18  dce  we now add LastLoggedOnUser to the file
-#                add architecture if x86, minor formatting changes
-# 04/06/18  dce  3.8.1 remove debugging code
-#                3.8.2 currently we need to update the Windows 10 version strings for each new version, put in a catchall if we haven't done that yet.
-#                script_version is a string
-# 05/10/18  ab   add windows 10 1809
-# 19/10/18  dce  update comments around "not required"
-# 25/01/19  dce  update 1603 error, if chrome tries to install an older version it fails 1603
-# 08/03/19  dce  3.8.5 simplify regex for "no uninstall entry" to make it match on linux too.
-# 12/03/19  dce  flag up if a package is broken
-# 27/03/19  dce  3.8.6 add 10.1903
-# 05/08/19  dce  update package broken code
-# 18/08/19  dce  add operating systems to header
-# 20/08/19  dce  Windows 10 version translation table in BEGIN section, remove "for workstations"
 # 22/08/19  dce  more work to cope with microsoft(r) & microsoft® in o/s string
 #                print errors for broken xml
 # 17/01/20  dce  add 1909
@@ -86,14 +27,15 @@
 # 23/11/20  dce  minor formatting
 # 24/11/20  dce  better handling of different error conditions
 # 25/12/20  dce  if multiple rsync messages, just show the last one
-
+# 12/03/21  dce  add note that gawk is required
+# 19/03/21  dce  better reporting of broken xml files
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.1"
+	script_version = "3.10.3"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -242,15 +184,19 @@ $1 ~ /LastLoggedOnUser/ {
 # 2019-08-02 07:02:57, ERROR   : Error parsing xml '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml': Das Stylesheet enthält kein Dokumentelement.  Das Stylesheet ist möglicherweise leer, oder es ist kein wohlgeformtes XML-Dokument.|
 # 2019-08-02 07:02:57, ERROR   : No root element found in '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml'.
 # 2019-08-02 07:02:57, ERROR   : Error parsing xml '//wpkgserver.de.accuride.com/wpkg/packages/klio.xml': Das Stylesheet enthält kein Dokumentelement.  Das Stylesheet ist möglicherweise leer, oder es ist kein wohlgeformtes XML-Dokument.|
-# for these ones we don't have a package name, and potentially we'll get this reported in every file, so just keep track of the ones which are unique
+# for these ones we don't have a package name (because the file's broken)
 /Error parsing xml/ {
 	# the part enclosed in ' is the file path, characters like "ä" break awk, so avoid them
 	split ($0, stringparts, "'")
 	package_file = stringparts[2]
-	if (!(package_file in broken_package_file)) {
-		print "Error parsing xml:", package_file
-		broken_package_file[package_file] = 1
-	}
+	# at this point we haven't got to the hostname line, so show the log file name
+	thisfile = substr(FILENAME,index(FILENAME,"wpkg-"))
+	print thisfile ": Error parsing xml:", package_file
+
+	# potentially we'll get this reported in every file, so we could just keep track of the ones which are unique
+	# if (!(package_file in broken_package_file)) {
+		# broken_package_file[package_file] = 1
+	# }
 }
 
 /Host properties: hostname=/ {
