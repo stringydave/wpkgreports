@@ -29,13 +29,14 @@
 # 25/12/20  dce  if multiple rsync messages, just show the last one
 # 12/03/21  dce  add note that gawk is required
 # 19/03/21  dce  better reporting of broken xml files
+# 26/03/21  dce  revert previous reporting of broken xml files as it was too verbose, just report unique instances.
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.3"
+	script_version = "3.10.4"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -189,14 +190,15 @@ $1 ~ /LastLoggedOnUser/ {
 	# the part enclosed in ' is the file path, characters like "ä" break awk, so avoid them
 	split ($0, stringparts, "'")
 	package_file = stringparts[2]
-	# at this point we haven't got to the hostname line, so show the log file name
-	thisfile = substr(FILENAME,index(FILENAME,"wpkg-"))
-	print thisfile ": Error parsing xml:", package_file
+	# at this point we haven't got to the hostname line, for diags show the log file name
+	# thisfile = substr(FILENAME,index(FILENAME,"wpkg-"))
+	# print thisfile ": Error parsing xml:", package_file
 
-	# potentially we'll get this reported in every file, so we could just keep track of the ones which are unique
-	# if (!(package_file in broken_package_file)) {
-		# broken_package_file[package_file] = 1
-	# }
+	# potentially we'll get this reported in every file, so we should just keep track of the ones which are unique
+	if (!(package_file in broken_package_file)) {
+		print "Error parsing xml:", package_file
+		broken_package_file[package_file] = 1
+	}
 }
 
 /Host properties: hostname=/ {
