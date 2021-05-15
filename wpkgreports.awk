@@ -30,6 +30,7 @@
 # 12/03/21  dce  add note that gawk is required
 # 19/03/21  dce  better reporting of broken xml files
 # 26/03/21  dce  revert previous reporting of broken xml files as it was too verbose, just report unique instances.
+# 18/04/21  dce  ignore boot time from Systeminfo as it's locale dependant.
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -133,18 +134,18 @@ $1 ~ /LastLoggedOnUser/ {
 	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
 }
 
-# somewhere in the file we've dumped the output of Systemino, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
-# System Boot Time:          09/11/2020, 12:28:13
-# System Boot Time:          20/04/2020, 12:08:53
-# System Boot Time:          5/14/2020, 7:00:09 AM
-/^System Boot Time/ {
-	dd = substr($4,1,2)
-	mm = substr($4,4,2)
-	yy = substr($4,7,4)
-	system_boot_date = yy "-" mm "-" dd
-	system_boot_time = substr($5,1,5)
-	boot_time[hostname] = system_boot_date " " system_boot_time
-}
+# somewhere in the file we've dumped the output of Systeminfo, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
+# however this will report wrong if the locale is wrong:
+# System Boot Time:          20/04/2020, 12:08:53		# Input Locale:              en-gb;English (United Kingdom)
+# System Boot Time:          5/14/2020, 7:00:09 AM		# Input Locale:              en-us;English (United States)
+# /^System Boot Time/ {
+	# dd = substr($4,1,2)
+	# mm = substr($4,4,2)
+	# yy = substr($4,7,4)
+	# system_boot_date = yy "-" mm "-" dd
+	# system_boot_time = substr($5,1,5)
+	# boot_time[hostname] = system_boot_date " " system_boot_time
+# }
 
 # System Manufacturer:       Dell Inc.
 /^System Manufacturer/ {
