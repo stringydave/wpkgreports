@@ -34,13 +34,14 @@
 # 15/06/21  dce  add 21H1 os code
 # 09/11/21  dce  cope with Windows 10 IOT ENTERPRISE
 # 15/11/21  dce  more DE language specifics
+# 27/12/21  dce  add 21H2
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.4"
+	script_version = "3.10.5"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
@@ -72,6 +73,7 @@ BEGIN {
     osrelease["10.0.19041"] = "10.2004"		# 20H1
     osrelease["10.0.19042"] = "10.20H2"		# 20H2
     osrelease["10.0.19043"] = "10.21H1"		# 21H1
+    osrelease["10.0.19044"] = "10.21H1"		# 21H2
     
     sline = "-------------------------------------------------------------------------------\n"
     dline = "===============================================================================\n"
