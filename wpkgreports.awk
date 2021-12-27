@@ -30,7 +30,10 @@
 # 12/03/21  dce  add note that gawk is required
 # 19/03/21  dce  better reporting of broken xml files
 # 26/03/21  dce  revert previous reporting of broken xml files as it was too verbose, just report unique instances.
-# 18/04/21  dce  ignore boot time from Systeminfo as it's locale dependant.
+# 18/04/21  dce  ignore boot time from sysiinfo as it's locale dependant.
+# 15/06/21  dce  add 21H1 os code
+# 09/11/21  dce  cope with Windows 10 IOT ENTERPRISE
+# 15/11/21  dce  more DE language specifics
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -57,7 +60,7 @@ BEGIN {
     errortext[1642] = "not valid patch"
 	
 	# translation table between ver strings and release names
-	# https://docs.microsoft.com/en-gb/windows/release-information/
+	# https://docs.microsoft.com/en-gb/windows/release-health/release-information
     osrelease["10.0.10586"] = "10.0"        # 1511
     osrelease["10.0.14393"] = "10.1607"
     osrelease["10.0.15063"] = "10.1703"
@@ -68,6 +71,7 @@ BEGIN {
     osrelease["10.0.18363"] = "10.1909"		# 19H2
     osrelease["10.0.19041"] = "10.2004"		# 20H1
     osrelease["10.0.19042"] = "10.20H2"		# 20H2
+    osrelease["10.0.19043"] = "10.21H1"		# 21H1
     
     sline = "-------------------------------------------------------------------------------\n"
     dline = "===============================================================================\n"
@@ -134,7 +138,7 @@ $1 ~ /LastLoggedOnUser/ {
 	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
 }
 
-# somewhere in the file we've dumped the output of Systeminfo, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
+# somewhere in the file we've dumped the output of Systemino, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
 # however this will report wrong if the locale is wrong:
 # System Boot Time:          20/04/2020, 12:08:53		# Input Locale:              en-gb;English (United Kingdom)
 # System Boot Time:          5/14/2020, 7:00:09 AM		# Input Locale:              en-us;English (United States)
@@ -148,16 +152,19 @@ $1 ~ /LastLoggedOnUser/ {
 # }
 
 # System Manufacturer:       Dell Inc.
-/^System Manufacturer/ {
+# Systemhersteller:          Dell Inc.
+/^System Manufacturer|^Systemhersteller/ {
 	system_manufacturer[hostname] = substr($0, index($0, $3))
 }
 # System Model:              Latitude 7300
-/^System Model/ {
+# Systemmodell:              OptiPlex 7010
+/^System Model|^Systemmodell/ {
 	system_model[hostname] = substr($0, index($0, $3))
 }
 
 # BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
-/^BIOS Version/ {
+# BIOS-Version:              Dell Inc. A29, 28.06.2018
+/^BIOS.Version/ {
 	system_bios[hostname] = substr($0, index($0, $3))
 	# remove the manufacturer name if it matches
 	sub(system_manufacturer[hostname], "", system_bios[hostname])
@@ -212,6 +219,8 @@ $1 ~ /LastLoggedOnUser/ {
 	# 2019-07-24 10:06:31, DEBUG   : Host properties: hostname='de6'|architecture='x64'|os='microsoft(r) windows(r) server 2003 standard x64 edition, , sp2, 5.2.3790'|ipaddresses='10.81.1.200,10.81.1.200'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='409'|lcidOS='409'
 	# 2019-08-02 07:03:00, DEBUG   : Host properties: hostname='desql2'|architecture='x64'|os='microsoft® windows server® 2008 standard, , sp2, 6.0.6002'|ipaddresses='10.81.1.202,10.81.1.202,10.81.35.34'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='407'|lcidOS='407'
     # 2020-05-10 05:20:34, DEBUG   : Host properties: hostname='zoomuk'|architecture='x64'|os='microsoft windows 10 enterprise 2016 ltsb, , , 10.0.14393'|ipaddresses='10.71.7.40'|domain name=''|groups=''|lcid='409'|lcidOS='409'
+	# 2021-11-08 05:26:34, DEBUG   : Host properties: hostname='nb033'|architecture='x64'|os='microsoft windows 10 iot enterprise, , , 10.0.18363'|ipaddresses='192.186.0.99,10.81.35.115,192.168.0.99'|domain name='de.accuride.com'|groups='Domain Computers'|lcid='407'|lcidOS='407'
+
 
 	split ($0, stringparts, "'")
 	hostname     = stringparts[2]
@@ -229,6 +238,7 @@ $1 ~ /LastLoggedOnUser/ {
 	sub (/ FOR WORKSTATIONS/, "", osparts[1])
 	sub (/ PROFESSIONAL/, "", osparts[1])
 	sub (/ ENTERPRISE.*LTSB/, " Ent", osparts[1])
+	sub (/ ENTERPRISE/, " Ent", osparts[1])
 	sub (/ STANDARD/, "", osparts[1])
 	sub (/ ULTIMATE/, "", osparts[1])
 	sub (/ EDITION/, "", osparts[1])
