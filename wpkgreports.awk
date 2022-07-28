@@ -35,6 +35,10 @@
 # 09/11/21  dce  cope with Windows 10 IOT ENTERPRISE
 # 15/11/21  dce  more DE language specifics
 # 27/12/21  dce  add 21H2
+# 12/06/22  dce  check for Bitlocker = off
+# 13/06/22  dce  and in German
+# 25/06/22  dce  check for no TPM
+# 28/07/22  dce  for broken packages, report the log file again so we can see if it's just one machine
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -44,7 +48,7 @@ BEGIN {
 	script_version = "3.10.5"
 	
 	IGNORECASE = 1
-	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = 0
+	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
     # these for formatting the output
     hostlen = 20
     oslen   = 20
@@ -73,7 +77,7 @@ BEGIN {
     osrelease["10.0.19041"] = "10.2004"		# 20H1
     osrelease["10.0.19042"] = "10.20H2"		# 20H2
     osrelease["10.0.19043"] = "10.21H1"		# 21H1
-    osrelease["10.0.19044"] = "10.21H1"		# 21H2
+    osrelease["10.0.19044"] = "10.21H2"		# 21H2
     
     sline = "-------------------------------------------------------------------------------\n"
     dline = "===============================================================================\n"
@@ -88,6 +92,7 @@ FNR == 1 { ++pc_count }
 	# and clear the data for this pc
     head_data = ""
 	this_data = ""
+	bitlocker_status = ""
 	for (i in package_status)
 		delete package_status[i]
 }
@@ -180,9 +185,40 @@ $1 ~ /LastLoggedOnUser/ {
 # SerialNumber      : GVZKQV2
 /^SerialNumber/ {
 	serial = $3
-	# we've written the file with windows so it has DOS line endings, but we're processing it on linux, so remove extraneous CR (0x0d)
+	# we've written the file with windows so it has DOS line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
 	# sub(/\r/, "", serial)
 	system_serial[hostname] = serial
+}
+
+# Protection Status:    Protection Off or Protection status: Protection is disabled
+#    Protection Status:    Protection On
+#    Lock Status:          Unlocked
+#    Identification Field: Unknown
+#    Key Protectors:
+#       TPM
+#       External Key
+#       Numerical Password
+# or fail:
+#   Protection Status:    Protection Off
+#   Lock Status:          Unlocked
+#   Identification Field: None
+#   Key Protectors:       None Found
+# odd character in this string
+# 	Schl.sselschutzvorrichtungen: Keine gefunden
+
+/Protection Status:.*Protection Off|Schutzstatus:.*Der Schutz ist deaktiviert/ {
+	bitlocker_status = "BL OFF"
+	++bitlocker_off
+}
+
+# Protection Status:    Protection Off
+/Schutzstatus:.*Der Schutz ist deaktiviert/ {
+	bitlocker_status = "BL OFF"
+	++bitlocker_off
+}
+
+/Key Protectors:.*None Found|sselschutzvorrichtungen:.*Keine gefunden/ {
+	bitlocker_status = bitlocker_status " (no TPM)"
 }
 
 # ignore lines to do with logfile or wpkgtidy
@@ -201,10 +237,14 @@ $1 ~ /LastLoggedOnUser/ {
 	split ($0, stringparts, "'")
 	package_file = stringparts[2]
 	# at this point we haven't got to the hostname line, for diags show the log file name
-	# thisfile = substr(FILENAME,index(FILENAME,"wpkg-"))
+	report_file = substr(FILENAME,index(FILENAME,"wpkg-"))
 	# print thisfile ": Error parsing xml:", package_file
 
 	# potentially we'll get this reported in every file, so we should just keep track of the ones which are unique
+	if (!(report_file in broken_report_file)) {
+		print "Error parsing log:", report_file
+		broken_report_file[report_file] = 1
+	}
 	if (!(package_file in broken_package_file)) {
 		print "Error parsing xml:", package_file
 		broken_package_file[package_file] = 1
@@ -543,7 +583,7 @@ END {
 	if (log_not_found > 0) {
 	print "log file not found:", log_not_found, "    ( wpkg not installed? )"
 	}
-	print "   unique packages:", unique_package_count
+	print "   unique packages:", unique_package_count, "bitlocker off:", bitlocker_off
 	if (package_count > 0) {
 	print " package instances:", package_count", of which", package_fail, "failed, &", not_checked, "not checked = " int(100 * (package_count - package_fail - not_checked)/package_count) "% success"
 	}
@@ -591,9 +631,9 @@ function format_results() {
 		boot_date_string = boot_time[hostname]
 	}
 	
- 	head_data =           sprintf("%-" hostlen "s      user : %-" userlen "s  run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%-" oslen   "s   profile : %-" userlen "s boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
- 	head_data = head_data sprintf("%-" hostlen "s    serial : %-" userlen "s bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
+ 	head_data =           sprintf("%-" hostlen "s   %s   user : %-" userlen "s  run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, bitlocker_status, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%-" oslen   "s   profile : %-"   userlen "s boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
+ 	head_data = head_data sprintf("%-" hostlen "s    serial : %-"   userlen "s bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
 	
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
     n = asorti(package_status, package_status_index)
