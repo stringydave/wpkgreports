@@ -39,13 +39,14 @@
 # 13/06/22  dce  and in German
 # 25/06/22  dce  check for no TPM
 # 28/07/22  dce  for broken packages, report the log file again so we can see if it's just one machine
+# 06/09/22  dce  print list of all profiles in use
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.5"
+	script_version = "3.10.7"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -322,6 +323,9 @@ $1 ~ /LastLoggedOnUser/ {
 	gsub(/\|$/, "", profile_list_data)   # other line endings
 	gsub(/\|/, ", ", profile_list_data)  # any other separator lines
 	profile_list[hostname] = profile_list_data
+	# and make a list of all profiles
+	gsub(/,.*/, "", profile_list_data)   # remove anything after the first comma
+	++all_profiles[profile_list_data]
 }
 
 # print out warnings
@@ -597,7 +601,11 @@ END {
 	if ("OLD" in fdata) { printf("%sfailed OLD installs:\n%s%s\n",       dline, dline, fdata["OLD"]) }
 	if ("OLD" in rdata) { printf("%ssuccessful OLD installs:\n%s%s\n",   dline, dline, rdata["OLD"]) }
 	
-	print "wpkgreports version", script_version
+	print "list of all profiles in use"
+	for (j in all_profiles) {
+		printf("%2s  %s\n", all_profiles[j], j)
+	}
+	print "\nwpkgreports version", script_version
 	
 	# quit with a count of how many recent computers are not complete
 	exit (pc_fail_today)
