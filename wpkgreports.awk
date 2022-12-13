@@ -46,7 +46,7 @@
 
 BEGIN {
 	# set script version
-	script_version = "3.10.7"
+	script_version = "3.10.8"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -76,9 +76,10 @@ BEGIN {
     osrelease["10.0.18362"] = "10.1903"		# 19H1
     osrelease["10.0.18363"] = "10.1909"		# 19H2
     osrelease["10.0.19041"] = "10.2004"		# 20H1
-    osrelease["10.0.19042"] = "10.20H2"		# 20H2
-    osrelease["10.0.19043"] = "10.21H1"		# 21H1
-    osrelease["10.0.19044"] = "10.21H2"		# 21H2
+    osrelease["10.0.19042"] = "10.20H2"
+    osrelease["10.0.19043"] = "10.21H1"
+    osrelease["10.0.19044"] = "10.21H2"
+    osrelease["10.0.19045"] = "10.22H2"
     
     sline = "-------------------------------------------------------------------------------\n"
     dline = "===============================================================================\n"
