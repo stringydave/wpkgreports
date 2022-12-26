@@ -30,7 +30,7 @@
 # 12/03/21  dce  add note that gawk is required
 # 19/03/21  dce  better reporting of broken xml files
 # 26/03/21  dce  revert previous reporting of broken xml files as it was too verbose, just report unique instances.
-# 18/04/21  dce  ignore boot time from sysiinfo as it's locale dependant.
+# 18/04/21  dce  ignore boot time from sysinfo as it's locale dependant.
 # 15/06/21  dce  add 21H1 os code
 # 09/11/21  dce  cope with Windows 10 IOT ENTERPRISE
 # 15/11/21  dce  more DE language specifics
@@ -40,13 +40,14 @@
 # 25/06/22  dce  check for no TPM
 # 28/07/22  dce  for broken packages, report the log file again so we can see if it's just one machine
 # 06/09/22  dce  print list of all profiles in use
+# 26/12/22  dce  print sorted list of all packages in use
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.8"
+	script_version = "3.10.9"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -402,11 +403,9 @@ $1 ~ /LastLoggedOnUser/ {
 	package_name = stringparts[2]
 	
 	# count the number of unique packages
-	if ((package_name in packages) == 0 ) {
-		++unique_package_count 
-		++packages[package_name]
-	}
-	
+	if ((package_name in packages) == 0 ) { ++unique_package_count }
+	# count instances of this package
+	++packages[package_name]
 	# and update the status of this one
 	package_status[package_name] = "not checked"
 	++package_count
@@ -601,10 +600,18 @@ END {
 	if ("*" in rdata)   { printf("%ssuccessful installs today:\n%s%s\n", dline, dline, rdata["*"]) }
 	if ("OLD" in fdata) { printf("%sfailed OLD installs:\n%s%s\n",       dline, dline, fdata["OLD"]) }
 	if ("OLD" in rdata) { printf("%ssuccessful OLD installs:\n%s%s\n",   dline, dline, rdata["OLD"]) }
-	
+
+	# add some summary information at the end, it's nice if it's sorted
 	print "list of all profiles in use"
-	for (j in all_profiles) {
-		printf("%2s  %s\n", all_profiles[j], j)
+    # use gawk's asorti function to sort on the index, the index values become the values of the second array
+    n = asorti(all_profiles, all_profiles_index)
+    for (j = 1; j <= n; j++) {
+		printf("%3s  %s\n", all_profiles[all_profiles_index[j]], all_profiles_index[j])
+	}
+	print "\nlist of all packages in use"
+    n = asorti(packages, package_index)
+    for (j = 1; j <= n; j++) {
+		printf("%3s  %s\n", packages[package_index[j]], package_index[j])
 	}
 	print "\nwpkgreports version", script_version
 	
