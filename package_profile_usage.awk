@@ -6,10 +6,8 @@
 # uses asorti so needs gawk
 
 # 29/12/22  dce  cover profiles in use as well
-
-# TODO: cover include for profiles
-# TODO: cover chain/depends for packages
-
+#                cover include for profiles
+#                chain/depends for packages are already included
 
 BEGIN {
 	minimum = 1
@@ -30,6 +28,21 @@ FILENAME ~ /profiles/ && / id=/ {
 	# and initialise the array
 	all_profiles[profile_id] = 0
 }
+# and also
+# <depends profile-id="standard" />
+# in principal there could be multiple depends lines, but in practice we don't do that
+FILENAME ~ /profiles/ && /<depends/ {
+	# we're interested in the string after the = up to the next " or '
+	depends_id = substr($0, index($0,"=")+2)
+	gsub(/".*/,"",depends_id) # remove "
+	gsub(/'.*/,"",depends_id) # remove '
+	gsub(/ */,"",depends_id)  # remove space
+	gsub(/\r/,"",depends_id)  # or any extraneous return
+	gsub(/\n/,"",depends_id)  # or line feed
+
+	# and add to the array
+	depends[profile_id] = depends_id
+}
 
 # in the packages file(s) we see things like this:
 # <package id="edidev"
@@ -47,15 +60,27 @@ FILENAME ~ /packages/ && / id=/ {
 	defined_package_list[package_id] = 0
 }
 
+# and also
+# <depends profile-id="standard" />
+# in principal there could be multiple chain/depends/include lines, but in practice we don't do that
+# <chain   package-id="otherpackage"/>
+# <depends package-id="otherpackage"/>
+# <include package-id="otherpackage"/>
+# but we already pick these up, if they are referenced, then we install them
+
 # in the output files we see "Profiles applying to the current host:|remote-it|"
 /Profiles applying to the current host/ {
-	profile_list_data = substr($0,index($0,":|")+2)
-	gsub(/\|\r/, "", profile_list_data)  # dos line endings
-	gsub(/\|$/, "", profile_list_data)   # other line endings
-	gsub(/\|/, ", ", profile_list_data)  # any other separator lines
+	host_profile = substr($0,index($0,":|")+2)
+	gsub(/\|\r/, "", host_profile)  # dos line endings
+	gsub(/\|$/, "", host_profile)   # other line endings
+	gsub(/\|/, ", ", host_profile)  # any other separator lines
 	# and make a list of all profiles
-	gsub(/,.*/, "", profile_list_data)   # remove anything after the first comma, so we lose any multiples (fix later)
-	++all_profiles[profile_list_data]
+	gsub(/,.*/, "", host_profile)   # remove anything after the first comma, so we lose any multiples (fix later)
+	# increment profile usage
+	++all_profiles[host_profile]
+	
+	# now if this profile depends on another, we should increment the usage of that too
+	if (host_profile in depends) { ++all_profiles[depends[host_profile]] }
 }
 
 # in the output files we see lots of "Found package node", this lists the packages actually used
@@ -70,7 +95,6 @@ FILENAME ~ /packages/ && / id=/ {
 	package_name_list[package_id] = package_name
 	# count instances of usage of this package
 	++defined_package_list[package_id]
-
 }
 
 END {
@@ -103,7 +127,7 @@ END {
 		}
 	}
 	print "\nlist of all packages where usage <=", minimum ":"
-    for (j = 1; j <= n; j++) {
+    for (j = 1; j <= m; j++) {
 		k = package_index[j]
 		if (defined_package_list[k] <= minimum) {
 			printf("%3s  %-40s %-s\n", defined_package_list[k], k, package_name_list[k])
