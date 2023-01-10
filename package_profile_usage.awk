@@ -9,6 +9,7 @@
 #                cover include for profiles
 #                chain/depends for packages are already included
 # 05/01/23  dce  looking for /Applying profile:/ in the log files is a better way of picking up profiles actually used
+#                better string match for /\sid=/
 
 BEGIN {
 	minimum = 1
@@ -17,7 +18,7 @@ BEGIN {
 
 # in the profiles file(s) we see things like :
 # <profile id="LaptopStd">
-FILENAME ~ /profiles/ && / id=/ {
+FILENAME ~ /profiles/ && /\sid=/ {
 	# we're interested in the string after the = up to the next " or '
 	profile_id = substr($0, index($0,"=")+2)
 	gsub(/".*/,"",profile_id) # remove " and anything after
@@ -46,8 +47,11 @@ FILENAME ~ /profiles/ && / id=/ {
 # }
 
 # in the packages file(s) we see things like this:
-# <package id="edidev"
-FILENAME ~ /packages/ && / id=/ {
+# <package id="packageid"
+# or
+# <package 
+#	id="packageid"
+FILENAME ~ /packages/ && /\sid=/ {
 	# we're interested in the string after the = up to the next " or '
 	package_id = substr($0, index($0,"=")+2)
 	# remove all the extra characters
@@ -94,6 +98,8 @@ FILENAME ~ /packages/ && / id=/ {
 /Applying profile:/ {
 	# NF is the number of fields, therefore $NF is the last field on the line
 	host_profile = $NF
+	gsub(/\r/, "", host_profile)  # dos line endings
+	gsub(/\n/, "", host_profile)  # other line endings
 	# increment profile usage
 	++all_profiles[host_profile]
 }
@@ -101,7 +107,9 @@ FILENAME ~ /packages/ && / id=/ {
 # : Adding profile dependencies of profile 'WorkstationStd': 'standard'
 /Adding profile dependencies of profile/ {
 	host_profile = $NF
-	gsub(/'/, "", host_profile)  # remove any quotes
+	gsub(/'/, "", host_profile)   # remove any quotes
+	gsub(/\r/, "", host_profile)  # dos line endings
+	gsub(/\n/, "", host_profile)  # other line endings
 	# increment profile usage
 	++all_profiles[host_profile]
 }
