@@ -42,13 +42,14 @@
 # 06/09/22  dce  print list of all profiles in use
 # 26/12/22  dce  print sorted list of all packages in use
 # 10/01/23  dce  package / profile usage moved to separate script
+# 28/01/23  dce  list required Dell Updates
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.10.10"
+	script_version = "3.11.1"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
