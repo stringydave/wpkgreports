@@ -97,6 +97,7 @@ FNR == 1 { ++pc_count }
     head_data = ""
 	this_data = ""
 	bitlocker_status = ""
+	dell_updates_this = 0
 	for (i in package_status)
 		delete package_status[i]
 }
@@ -550,6 +551,32 @@ $1 ~ /LastLoggedOnUser/ {
     package_status[package_name] = "zombie"
 }
 
+# Dell Command Update produces these lines about applicable updates
+# 3DC3X: Intel Management Engine Components Installer - Driver -- Recommended -- CS
+# 442GK: Dell Latitude 7300 and 7400 System BIOS - BIOS -- Urgent -- BI
+# 6621F: Realtek USB GBE Ethernet Controller Driver - Driver -- Recommended -- DK
+# 6GP36: Intel UHD Graphics Driver - Driver -- Urgent -- VI
+# 8GG09: DBUtil Removal Utility - Application -- Urgent -- SY
+# MVJH7: Dell SupportAssist OS Recovery Plugin for Dell Update - Application -- Recommended -- AP
+# PV7R1: Dell Power Manager Service - Application -- Recommended -- SM
+# V9PPW: Intel AX211/AX210/AX200/AX201/9560/9260/9462/8265/3165 Bluetooth UWD Driver - Driver -- Urgent -- NI
+# 88J36: Dell ControlVault3 Driver and Firmware - Driver -- Recommended -- SY
+
+/^.....:.*--/ {
+	# extract update code and description
+	dell_update_code = substr($1,1,5)
+	dell_update_desc = substr($0, index($0,": ") + 2)
+	++dell_updates_this
+	
+	# and load them into an array
+	++dell_update_reqd[dell_update_code]
+	dell_update_description[dell_update_code] = dell_update_desc
+	# and get the max number of updates required
+	if (dell_update_reqd[dell_update_code] > dell_update_max ) { dell_update_max = dell_update_reqd[dell_update_code] }
+}
+
+
+
 # the rsync process for remote machines produces these lines at the end, just pick up the last one of each type
 # 2017/04/07 08:32:57 [2380] total: matches=213719  hash_hits=213720  false_alarms=3 data=226467103
 # 2017/04/07 08:32:57 [2380] sent 1.41M bytes  received 227.39M bytes  686.07K bytes/sec
@@ -599,6 +626,15 @@ END {
 	if ("OLD" in fdata) { printf("%sfailed OLD installs:\n%s%s\n",       dline, dline, fdata["OLD"]) }
 	if ("OLD" in rdata) { printf("%ssuccessful OLD installs:\n%s%s\n",   dline, dline, rdata["OLD"]) }
 
+
+	# and report on Dell updates required
+	printf("Dell updates required:\n%s", sline)
+    for (j = dell_update_max; j >= 1; j--) {
+		for ( dell_update_code in dell_update_reqd ) {
+			if ( dell_update_reqd[dell_update_code] == j ) {printf ("%3d\t%s\t%s\n", j, dell_update_code, dell_update_description[dell_update_code]) }
+		}
+	}
+	
 	print "\nwpkgreports version", script_version
 	
 	# quit with a count of how many recent computers are not complete
@@ -651,6 +687,12 @@ function format_results() {
         }
         if (package_status[i] == "not checked") { ++not_checked }
     }
+	
+	if ( dell_updates_this > 0 ) {
+		# this_data = this_data sprintf("%30s : %15s : %s\n", "Dell Updates Required", dell_updates_this, "<<")
+		this_data = this_data sprintf("%30s : %15s\n", "Dell Updates Required", dell_updates_this)
+	}
+	
 	# if the packages were all ok (or if there were none), then this is a success
 	if (pc_state == 1) {
 		++pc_ok
