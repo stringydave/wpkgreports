@@ -43,13 +43,14 @@
 # 26/12/22  dce  print sorted list of all packages in use
 # 10/01/23  dce  package / profile usage moved to separate script
 # 28/01/23  dce  list required Dell Updates
+# 28/02/23  dce  better handling of System Manufacturer and Model in German
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.11.1"
+	script_version = "3.11.2"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -166,13 +167,17 @@ $1 ~ /LastLoggedOnUser/ {
 
 # System Manufacturer:       Dell Inc.
 # Systemhersteller:          Dell Inc.
+# Systemhersteller:          LENOVO.
 /^System Manufacturer|^Systemhersteller/ {
-	system_manufacturer[hostname] = substr($0, index($0, $3))
+	system_manufacturer[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_manufacturer[hostname])
 }
 # System Model:              Latitude 7300
 # Systemmodell:              OptiPlex 7010
+# Systemmodell:              10M70007GE
 /^System Model|^Systemmodell/ {
-	system_model[hostname] = substr($0, index($0, $3))
+	system_model[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_model[hostname])
 }
 
 # BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
