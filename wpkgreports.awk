@@ -44,19 +44,20 @@
 # 10/01/23  dce  package / profile usage moved to separate script
 # 28/01/23  dce  list required Dell Updates
 # 28/02/23  dce  better handling of System Manufacturer and Model in German
+# 24/03/23  dce  add better check for BitLocker = off for Portables only
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.11.2"
+	script_version = "3.11.3"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
     # these for formatting the output
     hostlen = 20
-    oslen   = 20
+    oslen   = 19
     userlen = 19
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
@@ -98,7 +99,8 @@ FNR == 1 { ++pc_count }
 	# and clear the data for this pc
     head_data = ""
 	this_data = ""
-	bitlocker_status = ""
+	ChassisType = TpmPresent = ""
+	bitlocker_status = "  "
 	dell_updates_this = 0
 	for (i in package_status)
 		delete package_status[i]
@@ -230,6 +232,41 @@ $1 ~ /LastLoggedOnUser/ {
 
 /Key Protectors:.*None Found|sselschutzvorrichtungen:.*Keine gefunden/ {
 	bitlocker_status = bitlocker_status " (no TPM)"
+}
+
+# we use a script to write:
+# BitLocker-Chassis: @{ChassisType=Portable}
+# BitLocker-TPM: @{TpmPresent=True}
+# BitLocker-Status: @{ProtectionStatus=On}
+
+# if the Chassis is not Portable, we're not worried
+/BitLocker-Chassis:/ {
+	if ($2 ~ /ChassisType=Portable/) {
+		ChassisType = "Portable"
+	}
+}
+# does it have a TPM
+/BitLocker-TPM:/ {
+	if ($2 ~ /TpmPresent=True/) {
+		TpmPresent = "True"
+	}
+}
+
+/BitLocker-Status:/ {
+	if ((ChassisType == "Portable") && ($2 ~ /ProtectionStatus=On/)) {
+		bitlocker_status = "bl"
+	} 
+	if ((ChassisType == "Portable") && ($2 !~ /ProtectionStatus=On/)) {
+		bitlocker_status = "BL OFF"
+		++bitlocker_off	
+	}
+	if ((ChassisType == "Portable") && (TpmPresent !~ /True/)) {
+		bitlocker_status = "BL OFF (no TPM)"
+		++bitlocker_off
+	}
+	if (ChassisType != "Portable") {
+		bitlocker_status = " -"
+	} 
 }
 
 # ignore lines to do with logfile or wpkgtidy
@@ -675,8 +712,8 @@ function format_results() {
 		boot_date_string = boot_time[hostname]
 	}
 	
- 	head_data =           sprintf("%-" hostlen "s   %s   user : %-" userlen "s  run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, bitlocker_status, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
- 	head_data = head_data sprintf("%-" oslen   "s   profile : %-"   userlen "s boot: %-22s\n", substr(_os[hostname],1,oslen), substr(profile_list[hostname],1,userlen), boot_date_string)
+ 	head_data =           sprintf("%-" hostlen "s      user : %-" userlen "s  run: %-16s %3s\n", _shortdomain[hostname] "\\" hostname, substr(usernames[hostname],1,userlen), _date_time[hostname],  _date_late[hostname])
+ 	head_data = head_data sprintf("%-" oslen   "s %s profile : %-"   userlen "s boot: %-22s\n", substr(_os[hostname],1,oslen), bitlocker_status, substr(profile_list[hostname],1,userlen), boot_date_string)
  	head_data = head_data sprintf("%-" hostlen "s    serial : %-"   userlen "s bios: %-22s\n", substr(system_model[hostname],1,hostlen), system_serial[hostname], system_bios[hostname])
 	
     # use gawk's asorti function to sort on the index, the index values become the values of the second array
