@@ -45,6 +45,7 @@
 # 28/01/23  dce  list required Dell Updates
 # 28/02/23  dce  better handling of System Manufacturer and Model in German
 # 24/03/23  dce  add better check for BitLocker = off for Portables only
+# 18/04/23  dce  cosmetic changes to BIOS reporting
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
@@ -173,6 +174,7 @@ $1 ~ /LastLoggedOnUser/ {
 /^System Manufacturer|^Systemhersteller/ {
 	system_manufacturer[hostname] = substr($0, index($0, ":"))
 	sub(/: */,"",system_manufacturer[hostname])
+	print system_manufacturer[hostname]
 }
 # System Model:              Latitude 7300
 # Systemmodell:              OptiPlex 7010
@@ -185,13 +187,15 @@ $1 ~ /LastLoggedOnUser/ {
 # BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
 # BIOS-Version:              Dell Inc. A29, 28.06.2018
 /^BIOS.Version/ {
-	system_bios[hostname] = substr($0, index($0, $3))
+	system_bios[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_bios[hostname])
 	# remove the manufacturer name if it matches
 	sub(system_manufacturer[hostname], "", system_bios[hostname])
 	# and these we see a lot
 	sub("Award Software International, Inc.", "Award", system_bios[hostname])
 	sub("Phoenix Technologies LTD", "Phoenix", system_bios[hostname])
-	# and any leading space
+	sub("American Megatrends Inc.", "AMI", system_bios[hostname])
+	# remove any leading space
 	sub("^ ", "", system_bios[hostname])
 }
 
