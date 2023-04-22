@@ -46,13 +46,16 @@
 # 28/02/23  dce  better handling of System Manufacturer and Model in German
 # 24/03/23  dce  add better check for BitLocker = off for Portables only
 # 18/04/23  dce  cosmetic changes to BIOS reporting
+# 21/04/23  dce  update code at "Failed checking after installation"
+# 22/04/23  dce  cosmetic restructure
+
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.11.3"
+	script_version = "3.12.0"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -91,6 +94,10 @@ BEGIN {
     dline = "===============================================================================\n"
 }
 
+# --------------------------------------------------------------------------------------------------------
+# Initialise
+# --------------------------------------------------------------------------------------------------------
+
 # count the number of files
 FNR == 1 { ++pc_count }
 
@@ -112,173 +119,16 @@ FNR == 1 { ++pc_count }
 	sub(/\r/, "")
 }
 
-# we have added a line with the username, but it may have something that's not /[A-Za-z0-9]/ at the end
-/^username/ { 
-	username = substr($0, index($0,"=") + 1)
-	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
-	sub(/[^A-Za-z0-9]+$/, "", username)
-   	hostname = tolower(FILENAME)
-	sub(/^.*wpkg-/, "", hostname)
-	sub(/.log/, "", hostname)
-	sub(/.usr/, "", hostname)
-    # print hostname, username, FILENAME, $0
-	# and load it into an array so we can pull it out again
-    usernames[hostname] = username
-}
+# --------------------------------------------------------------------------------------------------------
+# Parse WPKG logfile
+# --------------------------------------------------------------------------------------------------------
 
-# somewhere in the file we've dumped the contents of HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\LastLoggedOnUser
-# but it may have something that's not /[A-Za-z0-9]/ at the end
-#    LastLoggedOnUser    REG_SZ    DAVENTRY\simonw
+# ignore lines to do with some packages which are run for information
+/(logfile)/        { next } 
+/tidy temp files/  { next } 
+/(delldcuscan)/    { next } 
 
-$1 ~ /LastLoggedOnUser/ { 
-	username = substr($3, index($3,"\\") + 1)
-	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
-	sub(/[^A-Za-z0-9]+$/, "", username)
-   	hostname = tolower(FILENAME)
-	sub(/^.*wpkg-/, "", hostname)
-	sub(/.log/, "", hostname)
-	sub(/.usr/, "", hostname)
-    # print hostname, username, FILENAME, $0
-	# and load it into an array so we can pull it out again
-    usernames[hostname] = username
-}
-
-# LastBootUpTime
-# 20200507101250.501359+060
-# use the simplest form here to make sure it works, other locales might use a comma
-/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][,\.][0-9][0-9][0-9][0-9]/ {
-	yy = substr($1,1,4)
-	mm = substr($1,5,2)
-	dd = substr($1,7,2)
-	hh = substr($1,9,2)
-	mi = substr($1,11,2)
-	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
-}
-
-# somewhere in the file we've dumped the output of Systemino, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
-# however this will report wrong if the locale is wrong:
-# System Boot Time:          20/04/2020, 12:08:53		# Input Locale:              en-gb;English (United Kingdom)
-# System Boot Time:          5/14/2020, 7:00:09 AM		# Input Locale:              en-us;English (United States)
-# /^System Boot Time/ {
-	# dd = substr($4,1,2)
-	# mm = substr($4,4,2)
-	# yy = substr($4,7,4)
-	# system_boot_date = yy "-" mm "-" dd
-	# system_boot_time = substr($5,1,5)
-	# boot_time[hostname] = system_boot_date " " system_boot_time
-# }
-
-# System Manufacturer:       Dell Inc.
-# Systemhersteller:          Dell Inc.
-# Systemhersteller:          LENOVO.
-/^System Manufacturer|^Systemhersteller/ {
-	system_manufacturer[hostname] = substr($0, index($0, ":"))
-	sub(/: */,"",system_manufacturer[hostname])
-	print system_manufacturer[hostname]
-}
-# System Model:              Latitude 7300
-# Systemmodell:              OptiPlex 7010
-# Systemmodell:              10M70007GE
-/^System Model|^Systemmodell/ {
-	system_model[hostname] = substr($0, index($0, ":"))
-	sub(/: */,"",system_model[hostname])
-}
-
-# BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
-# BIOS-Version:              Dell Inc. A29, 28.06.2018
-/^BIOS.Version/ {
-	system_bios[hostname] = substr($0, index($0, ":"))
-	sub(/: */,"",system_bios[hostname])
-	# remove the manufacturer name if it matches
-	sub(system_manufacturer[hostname], "", system_bios[hostname])
-	# and these we see a lot
-	sub("Award Software International, Inc.", "Award", system_bios[hostname])
-	sub("Phoenix Technologies LTD", "Phoenix", system_bios[hostname])
-	sub("American Megatrends Inc.", "AMI", system_bios[hostname])
-	# remove any leading space
-	sub("^ ", "", system_bios[hostname])
-}
-
-# SerialNumber      : GVZKQV2
-/^SerialNumber/ {
-	serial = $3
-	# we've written the file with windows so it has DOS line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
-	# sub(/\r/, "", serial)
-	system_serial[hostname] = serial
-}
-
-# Protection Status:    Protection Off or Protection status: Protection is disabled
-#    Protection Status:    Protection On
-#    Lock Status:          Unlocked
-#    Identification Field: Unknown
-#    Key Protectors:
-#       TPM
-#       External Key
-#       Numerical Password
-# or fail:
-#   Protection Status:    Protection Off
-#   Lock Status:          Unlocked
-#   Identification Field: None
-#   Key Protectors:       None Found
-# odd character in this string
-# 	Schl.sselschutzvorrichtungen: Keine gefunden
-
-/Protection Status:.*Protection Off|Schutzstatus:.*Der Schutz ist deaktiviert/ {
-	bitlocker_status = "BL OFF"
-	++bitlocker_off
-}
-
-# Protection Status:    Protection Off
-/Schutzstatus:.*Der Schutz ist deaktiviert/ {
-	bitlocker_status = "BL OFF"
-	++bitlocker_off
-}
-
-/Key Protectors:.*None Found|sselschutzvorrichtungen:.*Keine gefunden/ {
-	bitlocker_status = bitlocker_status " (no TPM)"
-}
-
-# we use a script to write:
-# BitLocker-Chassis: @{ChassisType=Portable}
-# BitLocker-TPM: @{TpmPresent=True}
-# BitLocker-Status: @{ProtectionStatus=On}
-
-# if the Chassis is not Portable, we're not worried
-/BitLocker-Chassis:/ {
-	if ($2 ~ /ChassisType=Portable/) {
-		ChassisType = "Portable"
-	}
-}
-# does it have a TPM
-/BitLocker-TPM:/ {
-	if ($2 ~ /TpmPresent=True/) {
-		TpmPresent = "True"
-	}
-}
-
-/BitLocker-Status:/ {
-	if ((ChassisType == "Portable") && ($2 ~ /ProtectionStatus=On/)) {
-		bitlocker_status = "bl"
-	} 
-	if ((ChassisType == "Portable") && ($2 !~ /ProtectionStatus=On/)) {
-		bitlocker_status = "BL OFF"
-		++bitlocker_off	
-	}
-	if ((ChassisType == "Portable") && (TpmPresent !~ /True/)) {
-		bitlocker_status = "BL OFF (no TPM)"
-		++bitlocker_off
-	}
-	if (ChassisType != "Portable") {
-		bitlocker_status = " -"
-	} 
-}
-
-# ignore lines to do with logfile or wpkgtidy
-/(logfile)/  { next } 
-/tidy temp files/ { next } 
-# /Time Synchronization/ { next } # we might want to ignore this one too
-
-# if a package file is broken (1)
+# check if a package file is broken (1)
 # 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
 # 2019-08-02 07:02:57, ERROR   : Error parsing xml '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml': Das Stylesheet enthält kein Dokumentelement.  Das Stylesheet ist möglicherweise leer, oder es ist kein wohlgeformtes XML-Dokument.|
 # 2019-08-02 07:02:57, ERROR   : No root element found in '//wpkgserver.de.accuride.com/wpkg/packages/greenshot.xml'.
@@ -583,9 +433,12 @@ $1 ~ /LastLoggedOnUser/ {
 	package_status[package_name] = "Fail " package_timeout[package_name] errorcode
 }
 
+# 2013-08-12 12:22:12, ERROR   : Could not process (install) Mozilla Thunderbird.|Failed checking after installation.
 /Failed checking after installation/ {
 	# the package name is the bit between the ")" and the "|"
-	# 2013-08-12 12:22:12, ERROR   : Could not process (install) Mozilla Thunderbird.|Failed checking after installation.
+    package_name = $0
+    sub(/^.*) /, "", package_name)
+    sub(/\.\|.*$/, "", package_name)
 	package_status[package_name] = "Failed checking after installation."
 }
 
@@ -596,6 +449,170 @@ $1 ~ /LastLoggedOnUser/ {
     sub(/^.* \(remove\) /, "", package_name)
     sub(/\.\|.*$/, "", package_name)
     package_status[package_name] = "zombie"
+}
+
+# --------------------------------------------------------------------------------------------------------
+# Process other stuff
+# --------------------------------------------------------------------------------------------------------
+
+# we have added a line with the username, but it may have something that's not /[A-Za-z0-9]/ at the end
+/^username/ { 
+	username = substr($0, index($0,"=") + 1)
+	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
+	sub(/[^A-Za-z0-9]+$/, "", username)
+   	hostname = tolower(FILENAME)
+	sub(/^.*wpkg-/, "", hostname)
+	sub(/.log/, "", hostname)
+	sub(/.usr/, "", hostname)
+    # print hostname, username, FILENAME, $0
+	# and load it into an array so we can pull it out again
+    usernames[hostname] = username
+}
+
+# somewhere in the file we've dumped the contents of HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\LastLoggedOnUser
+# but it may have something that's not /[A-Za-z0-9]/ at the end
+#    LastLoggedOnUser    REG_SZ    DAVENTRY\simonw
+
+$1 ~ /LastLoggedOnUser/ { 
+	username = substr($3, index($3,"\\") + 1)
+	# we've written the file with windows so it has DOS line endings, but we're processing it on linux
+	sub(/[^A-Za-z0-9]+$/, "", username)
+   	hostname = tolower(FILENAME)
+	sub(/^.*wpkg-/, "", hostname)
+	sub(/.log/, "", hostname)
+	sub(/.usr/, "", hostname)
+    # print hostname, username, FILENAME, $0
+	# and load it into an array so we can pull it out again
+    usernames[hostname] = username
+}
+
+# LastBootUpTime
+# 20200507101250.501359+060
+# use the simplest form here to make sure it works, other locales might use a comma
+/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][,\.][0-9][0-9][0-9][0-9]/ {
+	yy = substr($1,1,4)
+	mm = substr($1,5,2)
+	dd = substr($1,7,2)
+	hh = substr($1,9,2)
+	mi = substr($1,11,2)
+	boot_time[hostname] = yy "-" mm "-" dd " " hh ":" mi
+}
+
+# somewhere in the file we've dumped the output of Systemino, we want to show the boot date if it's not today's date, so munge it into yyyy-mm-dd
+# however this will report wrong if the locale is wrong:
+# System Boot Time:          20/04/2020, 12:08:53		# Input Locale:              en-gb;English (United Kingdom)
+# System Boot Time:          5/14/2020, 7:00:09 AM		# Input Locale:              en-us;English (United States)
+# /^System Boot Time/ {
+	# dd = substr($4,1,2)
+	# mm = substr($4,4,2)
+	# yy = substr($4,7,4)
+	# system_boot_date = yy "-" mm "-" dd
+	# system_boot_time = substr($5,1,5)
+	# boot_time[hostname] = system_boot_date " " system_boot_time
+# }
+
+# System Manufacturer:       Dell Inc.
+# Systemhersteller:          Dell Inc.
+# Systemhersteller:          LENOVO.
+/^System Manufacturer|^Systemhersteller/ {
+	system_manufacturer[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_manufacturer[hostname])
+}
+# System Model:              Latitude 7300
+# Systemmodell:              OptiPlex 7010
+# Systemmodell:              10M70007GE
+/^System Model|^Systemmodell/ {
+	system_model[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_model[hostname])
+}
+
+# BIOS Version:              Dell Inc. 1.9.1, 12/06/2020
+# BIOS-Version:              Dell Inc. A29, 28.06.2018
+/^BIOS.Version/ {
+	system_bios[hostname] = substr($0, index($0, ":"))
+	sub(/: */,"",system_bios[hostname])
+	# remove the manufacturer name if it matches
+	sub(system_manufacturer[hostname], "", system_bios[hostname])
+	# and these we see a lot
+	sub("Award Software International, Inc.", "Award", system_bios[hostname])
+	sub("Phoenix Technologies LTD", "Phoenix", system_bios[hostname])
+	sub("American Megatrends Inc.", "AMI", system_bios[hostname])
+	# remove any leading space
+	sub("^ ", "", system_bios[hostname])
+}
+
+# SerialNumber      : GVZKQV2
+/^SerialNumber/ {
+	serial = $3
+	# we've written the file with windows so it has DOS line endings, but we may be processing it on linux, so remove extraneous CR (0x0d)
+	# sub(/\r/, "", serial)
+	system_serial[hostname] = serial
+}
+
+# Protection Status:    Protection Off or Protection status: Protection is disabled
+#    Protection Status:    Protection On
+#    Lock Status:          Unlocked
+#    Identification Field: Unknown
+#    Key Protectors:
+#       TPM
+#       External Key
+#       Numerical Password
+# or fail:
+#   Protection Status:    Protection Off
+#   Lock Status:          Unlocked
+#   Identification Field: None
+#   Key Protectors:       None Found
+# odd character in this string
+# 	Schl.sselschutzvorrichtungen: Keine gefunden
+
+/Protection Status:.*Protection Off|Schutzstatus:.*Der Schutz ist deaktiviert/ {
+	bitlocker_status = "BL OFF"
+	++bitlocker_off
+}
+
+# Protection Status:    Protection Off
+/Schutzstatus:.*Der Schutz ist deaktiviert/ {
+	bitlocker_status = "BL OFF"
+	++bitlocker_off
+}
+
+/Key Protectors:.*None Found|sselschutzvorrichtungen:.*Keine gefunden/ {
+	bitlocker_status = bitlocker_status " (no TPM)"
+}
+
+# we use a script to write:
+# BitLocker-Chassis: @{ChassisType=Portable}
+# BitLocker-TPM: @{TpmPresent=True}
+# BitLocker-Status: @{ProtectionStatus=On}
+
+# if the Chassis is not Portable, we're not worried
+/BitLocker-Chassis:/ {
+	if ($2 ~ /ChassisType=Portable/) {
+		ChassisType = "Portable"
+	}
+}
+# does it have a TPM
+/BitLocker-TPM:/ {
+	if ($2 ~ /TpmPresent=True/) {
+		TpmPresent = "True"
+	}
+}
+
+/BitLocker-Status:/ {
+	if ((ChassisType == "Portable") && ($2 ~ /ProtectionStatus=On/)) {
+		bitlocker_status = "bl"
+	} 
+	if ((ChassisType == "Portable") && ($2 !~ /ProtectionStatus=On/)) {
+		bitlocker_status = "BL OFF"
+		++bitlocker_off	
+	}
+	if ((ChassisType == "Portable") && (TpmPresent !~ /True/)) {
+		bitlocker_status = "BL OFF (no TPM)"
+		++bitlocker_off
+	}
+	if (ChassisType != "Portable") {
+		bitlocker_status = " -"
+	} 
 }
 
 # Dell Command Update produces these lines about applicable updates
@@ -623,7 +640,6 @@ $1 ~ /LastLoggedOnUser/ {
 }
 
 
-
 # the rsync process for remote machines produces these lines at the end, just pick up the last one of each type
 # 2017/04/07 08:32:57 [2380] total: matches=213719  hash_hits=213720  false_alarms=3 data=226467103
 # 2017/04/07 08:32:57 [2380] sent 1.41M bytes  received 227.39M bytes  686.07K bytes/sec
@@ -636,6 +652,10 @@ $1 ~ /LastLoggedOnUser/ {
 /] sent/  { rsync_sent   = $0 "\n" }
 /] rsync/ { rsync_status = $0 "\n" }
 # /] total |] rsync /      { rsync_status =  rsync_status }
+
+# --------------------------------------------------------------------------------------------------------
+# Output the results
+# --------------------------------------------------------------------------------------------------------
 
 END {
 	# gather the summary for the last file
