@@ -48,21 +48,22 @@
 # 18/04/23  dce  cosmetic changes to BIOS reporting
 # 21/04/23  dce  update code at "Failed checking after installation"
 # 22/04/23  dce  cosmetic restructure
-
+# 17/05/23  dce  new processing of delldcuscan
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.12.0"
+	script_version = "3.14.0"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
     # these for formatting the output
-    hostlen = 20
-    oslen   = 19
-    userlen = 19
+    hostlen  = 20
+    oslen    = 19
+    userlen  = 19
+	pkverlen = 17
     
 	# msiexec error codes here http://support.microsoft.com/kb/290158
 	errortext[1603] = "version or permissions"
@@ -126,7 +127,7 @@ FNR == 1 { ++pc_count }
 # ignore lines to do with some packages which are run for information
 /(logfile)/        { next } 
 /tidy temp files/  { next } 
-/(delldcuscan)/    { next } 
+# /(delldcuscan)/    { next } 
 
 # check if a package file is broken (1)
 # 2019-03-12 12:34:16, ERROR   : Error parsing xml '//wpkgserver.uk.accuride.com/wpkg/packages/fsclient.xml': The stylesheet does not contain a document element.  The stylesheet may be empty, or it may not be a well-formed XML document.|
@@ -329,7 +330,7 @@ FNR == 1 { ++pc_count }
         wpkg_version = substr(wpkg_version, 1, index(wpkg_version,"-") - 1)
     }
     # and make sure it's not too long (see also format_results())
-    package_version[package_name] = substr(wpkg_version,1,15)
+    package_version[package_name] = substr(wpkg_version,1,pkverlen)
    	package_status[package_name] = "installing"
     package_timeout[package_name] = ""
 }
@@ -640,6 +641,38 @@ $1 ~ /LastLoggedOnUser/ {
 }
 
 
+# Dell Command Update produces these lines about applicable updates
+# [2023-05-17 06:30:05] : The computer manufacturer is 'Dell' 
+# [2023-05-17 06:30:05] : Checking for updates... 
+# [2023-05-17 06:30:05] : Checking for application component updates... 
+# [2023-05-17 06:30:12] : Scanning system devices... 
+# [2023-05-17 06:30:20] : Determining available updates... 
+# [2023-05-17 06:30:24] : The scan result is VALID_RESULT 
+# [2023-05-17 06:30:24] : Check for updates completed 
+# [2023-05-17 06:30:24] : Number of applicable updates for the current system configuration: 6 
+# [2023-05-17 06:30:24] : 0V76N: Dell Latitude 7300 and 7400 System BIOS - BIOS -- Urgent -- BI 
+# [2023-05-17 06:30:24] : 3DC3X: Intel Management Engine Components Installer - Driver -- Recommended -- CS 
+# [2023-05-17 06:30:24] : 6GP36: Intel UHD Graphics Driver - Driver -- Urgent -- VI 
+# [2023-05-17 06:30:24] : 8678V: Dell Power Manager Service - Application -- Urgent -- SM 
+# [2023-05-17 06:30:24] : 8GG09: DBUtil Removal Utility - Application -- Urgent -- SY 
+# [2023-05-17 06:30:24] : HN6RG: Dell SupportAssist OS Recovery Plugin for Dell Update - Application -- Recommended -- AP 
+# [2023-05-17 06:30:25] : Execution completed. 
+# [2023-05-17 06:30:25] : The program exited with return code: 0 
+# [2023-05-17 06:30:25] : State monitoring instance total elapsed time = 00:00:21.9968067, Execution time = 51mS, Overhead = 0.236081085351357% 
+# [2023-05-17 06:30:25] : State monitoring disposed for application domain dcu-cli.exe 
+
+/ : .....:.*--/ {
+	# extract update code and description
+	dell_update_code = substr($4,1,5)
+	dell_update_desc = substr($0, index($0,$4) + 7)
+	++dell_updates_this
+	
+	# and load them into an array
+	++dell_update_reqd[dell_update_code]
+	dell_update_description[dell_update_code] = dell_update_desc
+	# and get the max number of updates required
+	if (dell_update_reqd[dell_update_code] > dell_update_max ) { dell_update_max = dell_update_reqd[dell_update_code] }
+}
 # the rsync process for remote machines produces these lines at the end, just pick up the last one of each type
 # 2017/04/07 08:32:57 [2380] total: matches=213719  hash_hits=213720  false_alarms=3 data=226467103
 # 2017/04/07 08:32:57 [2380] sent 1.41M bytes  received 227.39M bytes  686.07K bytes/sec
@@ -744,7 +777,7 @@ function format_results() {
     n = asorti(package_status, package_status_index)
     for (j = 1; j <= n; j++) {
         i = package_status_index[j] # this is the original index
-        this_data = this_data sprintf("%30s : %15s : %s\n", i, package_version[i], package_status[i])
+        this_data = this_data sprintf("%30s : %" pkverlen "s : %s\n", i, package_version[i], package_status[i])
         # be optimistic, assume packages have success unless they actually fail
         if ((package_status[i] ~ "Fail") || (package_status[i] ~ "zombie")) {
             ++package_fail
@@ -757,7 +790,7 @@ function format_results() {
 	
 	if ( dell_updates_this > 0 ) {
 		# this_data = this_data sprintf("%30s : %15s : %s\n", "Dell Updates Required", dell_updates_this, "<<")
-		this_data = this_data sprintf("%30s : %15s\n", "Dell Updates Required", dell_updates_this)
+		this_data = this_data sprintf("%30s : %" pkverlen "s\n", "Dell Updates Required", dell_updates_this)
 	}
 	
 	# if the packages were all ok (or if there were none), then this is a success
