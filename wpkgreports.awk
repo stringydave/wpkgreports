@@ -49,13 +49,15 @@
 # 21/04/23  dce  update code at "Failed checking after installation"
 # 22/04/23  dce  cosmetic restructure
 # 17/05/23  dce  new processing of delldcuscan
+# 13/06/23  dce  better processing of missing: test failed
+# 19/06/23  dce  dell update scan sometimes fails with network error
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.14.0"
+	script_version = "3.15.1"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -336,8 +338,18 @@ FNR == 1 { ++pc_count }
 }
 
 # Uninstall entry for ... missing: test failed.  :: products which are not required
+# when only updating DocuWare client when it's installed already
+# Uninstall entry for DocuWare Desktop Framework missing: test failed.
+# when installing Sophos, but not over Symantec
+# Uninstall entry for Symantec Endpoint Protection missing: test failed
 /Uninstall entry .* test failed/ {
-   	if ($0 !~ /Java 8/) { package_status[package_name] = "no uninstall entry" }
+	missing_package_name = substr($0, index($0, "Uninstall entry") + 20)
+	sub(/ missing: .*$/, "", missing_package_name)
+	# just test the first word for a match
+	test_package_name = package_name
+	sub(/ .*$/, "", test_package_name)
+	# print package_name ":" test_package_name ":" missing_package_name ":\n"
+   	if (missing_package_name ~ test_package_name) { package_status[package_name] = "no uninstall entry" }
 }
 
 # Package 'Visual C++ Redistributable' (vc_redist): Already installed.
@@ -660,7 +672,6 @@ $1 ~ /LastLoggedOnUser/ {
 # [2023-05-17 06:30:25] : The program exited with return code: 0 
 # [2023-05-17 06:30:25] : State monitoring instance total elapsed time = 00:00:21.9968067, Execution time = 51mS, Overhead = 0.236081085351357% 
 # [2023-05-17 06:30:25] : State monitoring disposed for application domain dcu-cli.exe 
-
 / : .....:.*--/ {
 	# extract update code and description
 	dell_update_code = substr($4,1,5)
@@ -673,6 +684,28 @@ $1 ~ /LastLoggedOnUser/ {
 	# and get the max number of updates required
 	if (dell_update_reqd[dell_update_code] > dell_update_max ) { dell_update_max = dell_update_reqd[dell_update_code] }
 }
+
+# [2023-06-15 08:29:33] : The scan result is DOWNLOAD_ERROR 
+# [2023-06-15 08:29:33] : INDEX_CATALOG_FAILED_DOWNLOAD is flagged in the scan results 
+# [2023-06-15 08:29:33] : NETWORK_ERROR is flagged in the scan results 
+/\[.*\] : .*ERROR/ {
+	# dell_update_code = substr($4,1,5)
+	# dell_update_desc = substr($0, index($0,$4) + 7)
+	dell_update_code = substr($0, 24)
+	sub(/_ERROR.*/, "", dell_update_code)
+	sub(/.* /, "", dell_update_code)
+	dell_update_desc = "ERROR"
+
+	++dell_updates_this
+	
+	# and load them into an array
+	++dell_update_reqd[dell_update_code]
+	dell_update_description[dell_update_code] = dell_update_desc
+	# and get the max number of updates required
+	if (dell_update_reqd[dell_update_code] > dell_update_max ) { dell_update_max = dell_update_reqd[dell_update_code] }
+	
+}
+
 # the rsync process for remote machines produces these lines at the end, just pick up the last one of each type
 # 2017/04/07 08:32:57 [2380] total: matches=213719  hash_hits=213720  false_alarms=3 data=226467103
 # 2017/04/07 08:32:57 [2380] sent 1.41M bytes  received 227.39M bytes  686.07K bytes/sec
