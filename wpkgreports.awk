@@ -51,13 +51,14 @@
 # 17/05/23  dce  new processing of delldcuscan
 # 13/06/23  dce  better processing of missing: test failed
 # 19/06/23  dce  dell update scan sometimes fails with network error
+# 26/06/23  dce  print a table of operating systems
 
 # be aware that packages may not be processed in strict sequential order, you may get messages from the end of a previous installation embedded in 
 # the start of the next package.
 
 BEGIN {
 	# set script version
-	script_version = "3.15.1"
+	script_version = "3.16.0"
 	
 	IGNORECASE = 1
 	pc_count = pc_ok = package_count = package_success = package_fail = package_undefined = not_checked = bitlocker_off = 0
@@ -730,15 +731,31 @@ END {
     # print the header
 	# list the operating systems
 	os_list_max = asorti(os_list, os_list_index)
+	w = s = 0
 	for (q = 1; q <= os_list_max; q++) {
+		# if (os_list_index[q] ~ /win/) {
+			# os_wks_all = os_wks_all wks_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
+			# wks_sep = ", "
+		# } else {
+			# os_svr_all = os_svr_all svr_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
+			# svr_sep = ", "
+		# }
 		if (os_list_index[q] ~ /win/) {
-			os_wks_all = os_wks_all wks_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
-			wks_sep = ", "
+			os_wks[w] = os_list_index[q]
+			os_wks_count[w] = os_list[os_list_index[q]]
+			w++
 		} else {
-			os_svr_all = os_svr_all svr_sep sprintf ("%s: %d", os_list_index[q], os_list[os_list_index[q]])
-			svr_sep = ", "
+			os_svr[s] = os_list_index[q]
+			if (os_list_index[q] ~ /NUL/) {os_svr[s] = "unknown"}
+			os_svr_count[s] = os_list[os_list_index[q]]
+			s++
 		}
 	}
+	
+	os_max = w
+	if (os_max < s) {os_max = s}
+	label_wks = "workstation o/s"
+	label_svr = "server o/s"
 	
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	print " computers checked:", pc_count", of which", pc_ok, "complete =", int(100 * pc_ok/pc_count) "% success"
@@ -749,9 +766,14 @@ END {
 	if (package_count > 0) {
 	print " package instances:", package_count", of which", package_fail, "failed, &", not_checked, "not checked = " int(100 * (package_count - package_fail - not_checked)/package_count) "% success"
 	}
+	# if (length(os_wks_all) > 1) { print "   workstation o/s:", os_wks_all }
+	# if (length(os_svr_all) > 1) { print "        server o/s:", os_svr_all }
+	
 	# if we've got o/s counts, then print them
-	if (length(os_wks_all) > 1) { print "   workstation o/s:", os_wks_all }
-	if (length(os_svr_all) > 1) { print "        server o/s:", os_svr_all }
+	for (k = 0; k <= os_max -1; k++) {
+		printf(" %17s: %-20s %3s %12s: %-15s %3s\n", label_wks, os_wks[k] "", os_wks_count[k] "", label_svr, os_svr[k] "", os_svr_count[k] "")
+		label_wks = label_svr = ""
+	}
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 	
 	if ("*" in fdata)   { printf("%sfailed installs today:\n%s%s\n",     dline, dline, fdata["*"]) }
