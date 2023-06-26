@@ -771,7 +771,7 @@ END {
 	
 	# if we've got o/s counts, then print them
 	for (k = 0; k <= os_max -1; k++) {
-		printf(" %17s: %-20s %3s %12s: %-15s %3s\n", label_wks, os_wks[k] "", os_wks_count[k] "", label_svr, os_svr[k] "", os_svr_count[k] "")
+		printf(" %17s: %-20s %3s %12s: %-16s %3s\n", label_wks, os_wks[k] "", os_wks_count[k] "", label_svr, os_svr[k] "", os_svr_count[k] "")
 		label_wks = label_svr = ""
 	}
 	print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
